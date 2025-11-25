@@ -1,0 +1,517 @@
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+from django.db import transaction
+from .models import (
+    AuthUser,
+    UserProfile,
+    OwnerProfile,
+    P_Lot,
+    P_Slot,
+    Booking,
+    Payment,
+    Carwash,
+    Carwash_type,
+    Review,
+    Employee,
+    Tasks,
+    VEHICLE_CHOICES,
+    BOOKING_CHOICES,
+    PAYMENT_CHOICES,
+)
+
+
+# Auth and register Serializer
+class UserRegisterSerializer(serializers.Serializer):
+
+    username = serializers.CharField()
+    email = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    firstname = serializers.CharField()
+    lastname = serializers.CharField()
+    phone = serializers.CharField()
+    vehicle_number = serializers.CharField()
+    vehicle_type = serializers.ChoiceField(choices=VEHICLE_CHOICES)
+
+    def validate_username(self, value):
+        if AuthUser.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already taken.")
+        return value
+
+    def validate_email(self, value):
+        if AuthUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+
+    def create(self, validated_data):
+        username = validated_data.pop("username")
+        email = validated_data.pop("email")
+        password = validated_data.pop("password")  # Extract auth fields
+
+        user = AuthUser.objects.create_user(
+            username=username,
+            email=email,
+            password=password,  # Create AuthUser
+            role="User",
+        )
+
+        UserProfile.objects.create(
+            auth_user=user,
+            firstname=validated_data.pop("firstname"),
+            lastname=validated_data.pop("lastname"),  # Create UserProfile
+            phone=validated_data.pop("phone"),
+            vehicle_number=validated_data.pop("vehicle_number"),
+            vehicle_type=validated_data.pop("vehicle_type"),
+        )
+        return user
+
+
+# Owner serializer
+class OwnerRegisterSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    email = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    firstname = serializers.CharField()
+    lastname = serializers.CharField()
+    phone = serializers.CharField()
+    streetname = serializers.CharField()
+    locality = serializers.CharField()
+    city = serializers.CharField()
+    state = serializers.CharField()
+    pincode = serializers.CharField()
+    verification_document_image = serializers.ImageField()
+    verification_status = serializers.CharField(
+        source="get_verification_status_display", required=False, allow_null=True)
+
+    def validate_username(self, value):
+        if AuthUser.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already taken.")
+        return value
+
+    def validate_email(self, value):
+        if AuthUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+
+
+    def create(self, validated_data):
+        username = validated_data.pop("username")
+        email = validated_data.pop("email")
+        password = validated_data.pop("password")
+
+        user = AuthUser.objects.create_user(
+            username=username, 
+            email=email, 
+            password=password, 
+            role="Owner"
+        )
+
+        OwnerProfile.objects.create(
+            auth_user=user,
+            firstname=validated_data.pop("firstname"),
+            lastname=validated_data.pop("lastname"),
+            phone=validated_data.pop("phone"),
+            streetname=validated_data.pop("streetname"),
+            locality=validated_data.pop("locality"),
+            city=validated_data.pop("city"),
+            state=validated_data.pop("state"),
+            pincode=validated_data.pop("pincode"),
+            verification_document_image=validated_data.get(
+                "verification_document_image", None),
+        )
+        return user
+
+
+# login Serializer
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+
+        username = attrs.get("username")
+        password = attrs.get("password")
+
+        user = authenticate(username=username, password=password)
+
+        if not user:
+            raise serializers.ValidationError("Invalid username or password")
+
+        attrs["user"] = user
+        return attrs
+
+
+# Profiles
+class UserProfileSerializer(serializers.ModelSerializer):
+    auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "id",
+            "auth_user",
+            "firstname",
+            "lastname",
+            "phone",
+            "vehicle_number",
+            "vehicle_type",
+        ]
+        read_only_fields = ["id", "auth_user"]
+
+
+class OwnerProfileSerializer(serializers.ModelSerializer):
+    auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = OwnerProfile
+        fields = [
+            "id",
+            "auth_user",
+            "firstname",
+            "lastname",
+            "phone",
+            "streetname",
+            "locality",
+            "city",
+            "state",
+            "pincode",
+            "verification_status",
+            "verification_document_image",
+        ]
+        read_only_fields = [
+            "id",
+            "auth_user",
+            "verification_status",
+        ]
+
+
+class P_LotSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all())
+    available_slots=serializers.SerializerMethodField()    
+    class Meta:
+        model = P_Lot
+        fields = [
+            "lot_id",
+            "owner",
+            "lot_name",
+            "streetname",
+            "locality",
+            "city",
+            "state",
+            "pincode",
+            "latitude",
+            "longitude",
+            "total_slots",
+            "available_slots",
+        ]
+    def get_available_slots(self, obj):
+        try:
+            return obj.slots.filter(is_available=True).count()
+        except:
+            return 0    
+
+    read_only_fields = ["lot_id", "available_slots"]
+
+
+# P_Slot serializer
+class PLotNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = P_Lot
+        fields = [
+            "lot_id",
+            "lot_name",
+            "streetname",
+            "city",
+            "pincode",
+            "total_slots",
+            "available_slots",
+        ]
+
+
+class P_SlotSerializer(serializers.ModelSerializer):
+    lot_detail = PLotNestedSerializer(source="lot",read_only=True)
+    lot = serializers.PrimaryKeyRelatedField(queryset=P_Lot.objects.all(), write_only=True)
+    vehicle_type = serializers.ChoiceField(choices=VEHICLE_CHOICES)
+
+    class Meta:
+        model = P_Slot
+        fields = ["slot_id", "lot_detail", "lot", "vehicle_type", "price", "is_available"]
+
+
+# Booking Serializer
+class UserProfileNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ["id", "firstname", "lastname", "vehicle_number"]
+
+class PLotNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = P_Lot
+        fields = ["lot_id", "lot_name", "latitude", "longitude"]
+
+class PSlotNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = P_Slot
+        fields = [
+            "slot_id",
+            "price",
+            "vehicle_type",
+            "is_available",
+        ]
+
+class BookingSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    lot = serializers.PrimaryKeyRelatedField(read_only=True)
+    slot = serializers.PrimaryKeyRelatedField(
+        queryset=P_Slot.objects.filter(is_available=True)
+    )
+    booking_type = serializers.ChoiceField(BOOKING_CHOICES)
+    user_read = UserProfileNestedSerializer(source="user", read_only=True)
+    lot_read = PLotNestedSerializer(source="lot", read_only=True)
+    slot_read = PSlotNestedSerializer(source="slot", read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = [
+            "booking_id",
+            "user",
+            "user_read",
+            "slot",
+            "slot_read",
+            "lot",
+            "lot_read",
+            "vehicle_number",
+            "booking_type",
+            "booking_time",
+            "price",
+            "status",
+        ]
+
+    read_only_fields = ["booking_id", "price", "status", "booking_time", "lot"]
+
+    def validate_slot(self, value):
+        if not value.is_available:
+            raise serializers.ValidationError("Selected slot is not available.")
+        return value
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        auth_user = request.user
+        user_profile = UserProfile.objects.get(auth_user=auth_user)
+        slot = validated_data["slot"]
+
+        with transaction.atomic():
+            price = slot.price
+            booking = Booking.objects.create(
+                user=user_profile,
+                slot=slot,
+                lot=slot.lot,
+                vehicle_number=validated_data["vehicle_number"],
+                booking_type=validated_data["booking_type"],
+                price=price,
+            )
+            slot.is_available = False
+            slot.save()
+        return booking
+
+
+# Payment Serializer
+# class PaymentUserNestedSerializer(serializers.ModelSerializer):
+# class Meta:
+# model=UserProfile
+# fields=['user_id','firstname','lastname','email']
+class PaymentBookingNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Booking
+        fields = [
+            "booking_id",
+            "booking_type",
+            "price",
+            "vehicle_number",
+            "booking_type",
+        ]
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.all())
+    booking_read = PaymentBookingNestedSerializer(source="booking", read_only=True)
+    payment_method = serializers.ChoiceField(choices=PAYMENT_CHOICES)
+
+    # user=PaymentUserNestedSerializer(read_only=True)
+    # user_id=serializers.PrimaryKeyRelatedField(queryset=UserProfile.objects.all(),write_only=True)
+    class Meta:
+        model = Payment
+        fields = [
+            "pay_id",
+            "booking_read",
+            "booking",
+            "user",
+            "payment_method",
+            "amount",
+        ]
+        read_only_fields = ["pay_id", "amount","user"]
+
+
+# Services Serializer
+# class SimplePLotSerializer(serializers.ModelSerializer):
+# class Meta:
+# model=P_Lot
+# fields=['lot_id','lot_name','latitude','longitude']
+
+# class ServicesSerializer(serializers.ModelSerializer):
+# lot_id=serializers.PrimaryKeyRelatedField(queryset=P_Lot.objects.all())
+# service_name=serializers.CharField(max_length=100,default='Carwash')
+
+
+# class Meta:
+# model=Services
+# fields=[
+#'service_id',
+#'lot_id',
+#'service_name',
+#'description',
+#'price'
+# ]
+# Carwashtype serializer
+class CarwashTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Carwash_type
+        fields = ["name", "carwash_type_id", "description", "price"]
+
+
+# Employee serializer
+class EmployeeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employee
+        fields = [
+            "employee_id",
+            "firstname",
+            "lastname",
+            "phone",
+            "latitude",
+            "longitude",
+            "driving_license","owner",
+            "driving_license_image",
+        ]
+
+        read_only_fields = ["owner"]
+
+# Carwash serializer
+class CarwashBookingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model= Booking
+        fields = ["booking_id", "booking_type", "price"]
+
+
+class EmployeeNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employee
+        fields = ["employee_id", "firstname", "lastname", "latitude", "longitude"]
+
+
+# class SimpleServicesSerializer(serializers.ModelSerializer):
+# class Meta:
+# model=Services
+# fields=['service_id','service_name','price']
+class CarwashTypeNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Carwash_type
+        fields = ["carwash_type_id", "name", "price"]
+
+
+class CarwashSerializer(serializers.ModelSerializer):
+    employee = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(), allow_null=True, required=False
+    )
+    booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.all())
+    carwash_type = serializers.PrimaryKeyRelatedField(queryset=Carwash_type.objects.all()
+    )
+    employee_read = EmployeeNestedSerializer(source="employee", read_only=True)
+    booking_read = CarwashBookingSerializer(source="booking", read_only=True)
+    carwash_type_read = CarwashTypeNestedSerializer(source="carwash_type", read_only=True)
+
+    # the above is a virtual field
+    # service=SimpleServicesSerializer(read_only=True)
+    # service_id=serializers.PrimaryKeyRelatedField(queryset=Services.objects.all())
+    class Meta:
+        model = Carwash
+        fields = [
+            "booking",
+            "booking_read",
+            #'service',
+            #'service_id',
+            "employee",
+            "employee_read",
+            "carwash_type",
+            "carwash_type_read",
+        ]
+        read_only_fields = ["carwash_id", "price"]
+
+    def create(self, validated_data):
+        carwash_type = validated_data["carwash_type"]
+        validated_data["price"] = carwash_type.price
+
+        return Carwash.objects.create(**validated_data)
+
+
+# Tasks Serializer
+class TasksBookingNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Booking
+        fields = ["booking_id", "booking_type", "price"]
+
+
+class TasksEmployeeNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employee
+        fields = ["employee_id", "firstname", "lastname", "latitude", "longitude"]
+
+
+class TasksSerializer(serializers.ModelSerializer):
+    booking = serializers.PrimaryKeyRelatedField(
+        queryset=Booking.objects.all(), write_only=True
+    )
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all())
+    booking_read = TasksBookingNestedSerializer(source="booking", read_only=True)
+    employee_read = TasksEmployeeNestedSerializer(source="employee", read_only=True)
+
+    class Meta:
+        model = Tasks
+        fields = [
+            "task_id",
+            "booking",
+            "booking_read",
+            "employee_read",
+            "employee",
+            "task_type",
+        ]
+
+
+# Review serializer
+class ReviewUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ["id", "firstname", "lastname"]
+
+
+class ReviewPLotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = P_Lot
+        fields = ["lot_id", "lot_name", "latitude", "longitude"]
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=UserProfile.objects.all())
+    lot = serializers.PrimaryKeyRelatedField(queryset=P_Lot.objects.all())
+    user_detail = ReviewUserSerializer(source="user",read_only=True)
+    lot_detail = ReviewPLotSerializer(source="lot",read_only=True)
+
+    class Meta:
+        model = Review
+        fields = [
+            "rev_id",
+            "user_detail",
+            "lot_detail",
+            "user",
+            "lot", "rating",
+            "review_desc",
+        ]
