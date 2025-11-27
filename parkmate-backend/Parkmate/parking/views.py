@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.viewsets import ViewSet, ModelViewSet
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.authtoken.models import Token
 from rest_framework import status
 from rest_framework import serializers
@@ -17,6 +17,41 @@ from .serializers import (UserRegisterSerializer, OwnerRegisterSerializer,
                           PaymentSerializer,CarwashTypeSerializer,CarwashSerializer,
                           EmployeeSerializer,TasksSerializer,ReviewSerializer,
                           LoginSerializer)
+
+
+# Custom Permission Classes
+class IsAdmin(BasePermission):
+    """
+    Allow access only to admin users.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
+        return user.is_superuser or user_role == 'admin'
+
+
+class IsAdminOrReadOwn(BasePermission):
+    """
+    Allow admins to perform any action, regular users can only view/edit their own profile.
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
+        
+        # Admin can do anything
+        if user.is_superuser or user_role == 'admin':
+            return True
+        
+        # Regular users can only access their own profile
+        if hasattr(obj, 'auth_user'):
+            return obj.auth_user == user
+        
+        return False
 
 
 class AuthViewSet(ViewSet):
@@ -100,34 +135,108 @@ class AuthViewSet(ViewSet):
 class UserProfileViewSet(ModelViewSet):
     queryset=UserProfile.objects.all()
     serializer_class=UserProfileSerializer
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsAdminOrReadOwn]
 
     def get_queryset(self):
-        return UserProfile.objects.filter(auth_user=self.request.user)
+        user = self.request.user
+        # Admin and Superuser can see all user profiles
+        user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
+        if user.is_superuser or user_role == 'admin':
+            return UserProfile.objects.all()
+        # Regular users can only see their own profile
+        return UserProfile.objects.filter(auth_user=user)
     
     def update(self, request, *args, **kwargs):
-        profile=UserProfile.objects.get(auth_user=request.user)
-        serializer=self.get_serializer(profile,data=request.data, partial=True)
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        # Admin can update any profile
+        if request.user.is_superuser or user_role == 'admin':
+            profile = UserProfile.objects.get(pk=kwargs.get('pk'))
+        else:
+            # Regular users can only update their own profile
+            profile = UserProfile.objects.get(auth_user=request.user)
+        
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete a user profile - admin only"""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can delete users.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        profile = self.get_object()
+        auth_user = profile.auth_user
+        
+        # Delete the profile first
+        profile.delete()
+        
+        # Then delete the auth user if desired (optional - you might want to keep it for history)
+        # Uncomment if you want to delete the auth user too:
+        # auth_user.delete()
+        
+        return Response(
+            {'detail': 'User profile deleted successfully.'},
+            status=status.HTTP_204_NO_CONTENT
+        )
     
 class OwnerProfileViewSet(ModelViewSet):
     queryset=OwnerProfile.objects.all()
     serializer_class=OwnerProfileSerializer
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsAdminOrReadOwn]
 
     def get_queryset(self):
-        return OwnerProfile.objects.filter(auth_user=self.request.user)
+        user = self.request.user
+        # Admin and Superuser can see all owner profiles
+        user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
+        if user.is_superuser or user_role == 'admin':
+            return OwnerProfile.objects.all()
+        # Regular owners can only see their own profile
+        return OwnerProfile.objects.filter(auth_user=user)
 
     def update(self, request, *args, **kwargs):
-        profile=OwnerProfile.objects.get(auth_user=request.user)
-        serializer=self.get_serializer(profile,data=request.data,partial=True)
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        # Admin can update any profile
+        if request.user.is_superuser or user_role == 'admin':
+            profile = OwnerProfile.objects.get(pk=kwargs.get('pk'))
+        else:
+            # Regular owners can only update their own profile
+            profile = OwnerProfile.objects.get(auth_user=request.user)
+        
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete an owner profile - admin only"""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can delete owners.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        profile = self.get_object()
+        auth_user = profile.auth_user
+        
+        # Delete the profile first
+        profile.delete()
+        
+        return Response(
+            {'detail': 'Owner profile deleted successfully.'},
+            status=status.HTTP_204_NO_CONTENT
+        )    
 
 
 #P_LotViewsets
@@ -141,11 +250,21 @@ class P_LotVIewSet(ModelViewSet):
         if user.role =="Owner":
             owner=OwnerProfile.objects.get(auth_user=user)
             return P_Lot.objects.filter(owner=owner)
-        return P_Lot.objects.filter(owner__verification_status="Approved")
+        return P_Lot.objects.filter(owner__verification_status="APPROVED")
     
     def perform_create(self, serializer):
         owner=OwnerProfile.objects.get(auth_user=self.request.user)
-        serializer.save(owner=owner)
+        lot = serializer.save(owner=owner)
+        
+        # Auto-create parking slots for the new lot
+        total_slots = lot.total_slots
+        for i in range(total_slots):
+            P_Slot.objects.create(
+                lot=lot,
+                vehicle_type='CAR',  # Default vehicle type
+                is_available=True
+            )
+        print(f"✅ Created {total_slots} parking slots for lot: {lot.lot_name}")
 
 #P_SlotViewsets
 class P_SlotViewSet(ModelViewSet):
@@ -157,7 +276,7 @@ class P_SlotViewSet(ModelViewSet):
         if user.role=="Owner":
             owner=OwnerProfile.objects.get(auth_user=user)
             return P_Slot.objects.filter(lot__owner=owner)
-        return P_Slot.objects.filter(lot__owner__verification_status="Approved")
+        return P_Slot.objects.filter(lot__owner__verification_status="APPROVED")
     
     def perform_create(self, serializer):
         owner=OwnerProfile.objects.get(auth_user=self.request.user)
@@ -184,6 +303,14 @@ class BookingViewSet(ModelViewSet):
         return Booking.objects.all()
         
     def perform_create(self, serializer):
+        return serializer.save()
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        # Only admin can update booking status
+        if user.role != "admin":
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admin can update booking status")
         return serializer.save()
 
 class PaymentViewSet(ModelViewSet):
@@ -227,9 +354,34 @@ class CarwashTypeViewSet(ModelViewSet):
     permission_classes=[IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.role=="Admin":
-            return Carwash_type.objects.all()
-        return Carwash_type.objects.none()
+        # All authenticated users can view carwash types
+        return Carwash_type.objects.all()
+    
+    def perform_update(self, serializer):
+        user = self.request.user
+        # Only admin can update carwash types
+        if not (user.is_superuser or getattr(user, 'role', '') == 'admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admin can update carwash service details")
+        serializer.save()
+    
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Only admin can create carwash types
+        if not (user.is_superuser or getattr(user, 'role', '') == 'admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admin can create carwash types")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        user = self.request.user
+        # Admin cannot delete carwash types in this version
+        if not (user.is_superuser or getattr(user, 'role', '') == 'admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admin can delete carwash types")
+        # Prevent deletion regardless
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("Carwash types cannot be deleted in this version")
 
 
 class EmployeeViewSet(ModelViewSet):
@@ -239,7 +391,7 @@ class EmployeeViewSet(ModelViewSet):
     def get_queryset(self):
         user=self.request.user
         if user.is_superuser or getattr(user,'role','')=='Admin':
-            return Employee.objetcs.all()
+            return Employee.objects.all()
         
         if getattr(user, 'role','')=='Owner':
             try:
@@ -248,7 +400,17 @@ class EmployeeViewSet(ModelViewSet):
             except OwnerProfile.DoesNotExist:
                 return Employee.objects.none()
         
-        return Employee.objects.none()
+        # Regular users can see all employees (for car wash booking)
+        return Employee.objects.all()
+    
+    def perform_update(self, serializer):
+        user = self.request.user
+        # Only admin can assign employees to owners
+        if not (user.is_superuser or getattr(user, 'role', '') == 'Admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admin can assign employees to owners")
+        serializer.save()
+    
     def perform_create(self, serializer):
         user=self.request.user
         if user.is_superuser or getattr(user,'role','')=='Admin':
@@ -265,7 +427,7 @@ class EmployeeViewSet(ModelViewSet):
                 raise serializers.ValidationError({"owner_id": "Owner ID not found."})
 
         else:
-            owner=OwnerProfile.objetcs.get(auth_user=user)
+            owner=OwnerProfile.objects.get(auth_user=user)
             serializer.save(owner=owner)    
                 
 

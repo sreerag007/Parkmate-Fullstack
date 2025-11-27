@@ -86,7 +86,7 @@ class OwnerProfile(models.Model):
     state=models.CharField(max_length=100)
     pincode=models.CharField(max_length=6,help_text="6-digit PIN code",validators=[pincode_regex])
     #verification_id=models.CharField(max_length=100,null=True,blank=True)#Land document is the verification id.
-    verification_status=models.CharField(max_length=20,choices=VERIFATION_STATUS_CHOICE,help_text="Admin approval status for owner")
+    verification_status=models.CharField(max_length=20,choices=VERIFATION_STATUS_CHOICE,default=STATUS_PENDING,help_text="Admin approval status for owner")
     verification_document_image=models.ImageField(upload_to='verification_documents/',null=True,
                                                   blank=True,help_text="Scanned copy of verification document")
     # Saves to MEDIA_ROOT/verification_documents/
@@ -186,9 +186,9 @@ class Booking(models.Model):
     price=models.DecimalField(max_digits=5,decimal_places=2,default=0.00)
 
     STATUS_CHOICES=[
-        ('Booked','Booked'),
-        ('Completed','Completed'),
-        ('Cancelled','Cancelled')
+        ('booked','Booked'),
+        ('completed','Completed'),
+        ('cancelled','Cancelled')
     ]
     status=models.CharField(max_length=10,choices=STATUS_CHOICES,default="booked")
 

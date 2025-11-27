@@ -117,6 +117,7 @@ class OwnerRegisterSerializer(serializers.Serializer):
             pincode=validated_data.pop("pincode"),
             verification_document_image=validated_data.get(
                 "verification_document_image", None),
+            verification_status="PENDING",
         )
         return user
 
@@ -157,6 +158,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "auth_user"]
 
+    def create(self, validated_data):
+        request = self.context.get("request")
+        validated_data["auth_user"] = request.user
+        return super().create(validated_data)
+
 
 class OwnerProfileSerializer(serializers.ModelSerializer):
     auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -180,12 +186,11 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "auth_user",
-            "verification_status",
         ]
 
 
 class P_LotSerializer(serializers.ModelSerializer):
-    owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all())
+    owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all(), required=False)
     available_slots=serializers.SerializerMethodField()    
     class Meta:
         model = P_Lot
@@ -249,6 +254,8 @@ class PLotNestedSerializer(serializers.ModelSerializer):
         fields = ["lot_id", "lot_name", "latitude", "longitude"]
 
 class PSlotNestedSerializer(serializers.ModelSerializer):
+    lot_detail = PLotNestedSerializer(source="lot", read_only=True)
+    
     class Meta:
         model = P_Slot
         fields = [
@@ -256,6 +263,7 @@ class PSlotNestedSerializer(serializers.ModelSerializer):
             "price",
             "vehicle_type",
             "is_available",
+            "lot_detail",
         ]
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -266,7 +274,7 @@ class BookingSerializer(serializers.ModelSerializer):
     )
     booking_type = serializers.ChoiceField(BOOKING_CHOICES)
     user_read = UserProfileNestedSerializer(source="user", read_only=True)
-    lot_read = PLotNestedSerializer(source="lot", read_only=True)
+    lot_detail = serializers.SerializerMethodField()
     slot_read = PSlotNestedSerializer(source="slot", read_only=True)
 
     class Meta:
@@ -278,7 +286,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "slot",
             "slot_read",
             "lot",
-            "lot_read",
+            "lot_detail",
             "vehicle_number",
             "booking_type",
             "booking_time",
@@ -286,7 +294,14 @@ class BookingSerializer(serializers.ModelSerializer):
             "status",
         ]
 
-    read_only_fields = ["booking_id", "price", "status", "booking_time", "lot"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot"]
+
+    def get_lot_detail(self, obj):
+        """Get lot details from the slot"""
+        if obj.slot and obj.slot.lot:
+            serializer = PLotNestedSerializer(obj.slot.lot)
+            return serializer.data
+        return None
 
     def validate_slot(self, value):
         if not value.is_available:
@@ -380,6 +395,8 @@ class CarwashTypeSerializer(serializers.ModelSerializer):
 
 # Employee serializer
 class EmployeeSerializer(serializers.ModelSerializer):
+    owner_detail = serializers.SerializerMethodField(read_only=True)
+    
     class Meta:
         model = Employee
         fields = [
@@ -389,11 +406,23 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "phone",
             "latitude",
             "longitude",
-            "driving_license","owner",
+            "driving_license",
             "driving_license_image",
+            "owner",
+            "owner_detail",
         ]
 
-        read_only_fields = ["owner"]
+        read_only_fields = ["employee_id"]
+    
+    def get_owner_detail(self, obj):
+        if obj.owner:
+            return {
+                'id': obj.owner.id,
+                'firstname': obj.owner.firstname,
+                'lastname': obj.owner.lastname,
+                'phone': obj.owner.phone
+            }
+        return None
 
 # Carwash serializer
 class CarwashBookingSerializer(serializers.ModelSerializer):
