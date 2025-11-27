@@ -1,0 +1,117 @@
+.Land {
+    padding: 36px 0
+}
+
+#box1 h1 {
+    font-family: serif;
+    font-size: 48px
+}
+
+#box2 p {
+    max-width: 640px
+}
+
+.btn {
+    display: inline-block;
+    padding: 10px 14px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 8px
+}
+
+.Land {
+    width: 100%;
+    padding: 20px 0;
+    background: linear-gradient(180deg, var(--bg-0), var(--bg-1))
+}
+
+.Land .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    padding-top: 18px
+}
+
+.Land #content1 {
+    width: 100%;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 6px
+}
+
+.Land #content1 #box1 {
+    width: 100%;
+    height: 420px;
+    border-radius: 16px;
+    background-image: url(https://images.unsplash.com/photo-1470224114660-3f6686c562eb?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NHx8cGFya2luZ3xlbnwwfHwwfHx8MA%3D%3D);
+    background-position: center;
+    background-size: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px
+}
+
+.Land #content1 #box1 h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #ffffff;
+    font-size: 4.2rem;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 1.6px;
+    line-height: 1.02;
+    text-shadow: 0 6px 18px rgba(0, 0, 0, 0.06)
+}
+
+.Land #content1 #box2 {
+    width: 100%;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    background-size: cover
+}
+
+.Land #content1 #box2 h4 {
+    font-family: Arrayy;
+    font-size: 1.6rem;
+    font-weight: 800
+}
+
+.Land #content1 #box2 p {
+    font-family: Arrayy;
+    font-size: 1rem;
+    color: var(--muted);
+    line-height: 1.5;
+    text-align: center
+}
+
+.Land #content1 #box2 button {
+    background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+    color: #fff;
+    padding: 10px 28px;
+    border-radius: 10px;
+    border: 0
+}
+
+@media(max-width:760px) {
+    .Land #content1 #box1 {
+        height: 280px
+    }
+
+    .Land #content1 #box1 h1 {
+        font-size: 2.4rem
+    }
+
+    .Land #content1 #box2 h4 {
+        font-size: 1.2rem
+    }
+}

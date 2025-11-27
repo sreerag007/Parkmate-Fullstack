@@ -1,0 +1,60 @@
+.reg-page {
+  padding: 36px 0;
+}
+
+.form {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px;
+  display: block;
+}
+
+.form h2 {
+  margin: 0 0 12px;
+}
+
+.form .row {
+  display: flex;
+  gap: 12px;
+}
+
+.form label {
+  display: block;
+  margin: 10px 0;
+}
+
+.form label span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.form input, .form select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.form .form-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.form .form-error {
+  background: #ffecec;
+  color: #8a1f1f;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+}/*# sourceMappingURL=Reg.css.map */

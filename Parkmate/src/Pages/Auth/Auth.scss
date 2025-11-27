@@ -1,0 +1,143 @@
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    padding: 20px;
+}
+
+.auth-card {
+    background: #fff;
+    padding: 40px;
+    border-radius: 24px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid #e2e8f0;
+}
+
+.auth-card h2 {
+    margin: 0 0 8px 0;
+    color: #0f172a;
+    font-size: 1.75rem;
+    text-align: center;
+}
+
+.auth-subtitle {
+    color: #64748b;
+    text-align: center;
+    margin: 0 0 32px 0;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #334155;
+    font-size: 0.9rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn-primary.full-width {
+    width: 100%;
+    margin-top: 12px;
+    padding: 14px;
+    font-size: 1rem;
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 24px;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.auth-footer a {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 24px 0;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.divider::before {
+    margin-right: 12px;
+}
+
+.divider::after {
+    margin-left: 12px;
+}
+
+/* Owner Theme Override */
+.owner-theme .auth-container {
+    background: #0f172a;
+}
+
+.owner-theme .btn-primary {
+    background: #0f172a;
+}
+
+.owner-theme .btn-primary:hover {
+    background: #1e293b;
+}
+
+/* Admin Theme Override */
+.admin-theme {
+    background: #1e293b;
+}
+
+.admin-theme .auth-card {
+    border-top: 4px solid #ef4444;
+    /* Red accent for admin */
+}
+
+.admin-theme .btn-primary {
+    background: #ef4444;
+}
+
+.admin-theme .btn-primary:hover {
+    background: #dc2626;
+}
+
+.admin-theme .form-group input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}

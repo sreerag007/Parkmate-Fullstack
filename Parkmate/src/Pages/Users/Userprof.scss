@@ -1,0 +1,363 @@
+.userprof-root {
+    padding: 28px 0
+}
+
+/* Profile Section Styles */
+.profile-section {
+    margin-bottom: 32px;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+.profile-info {
+    margin-top: 16px;
+}
+
+.info-row {
+    padding: 12px 0;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    gap: 12px;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row strong {
+    min-width: 150px;
+    color: #6b7280;
+}
+
+.edit-form {
+    margin-top: 16px;
+}
+
+.edit-form .form-group {
+    margin-bottom: 16px;
+}
+
+.edit-form label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.edit-form input,
+.edit-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.edit-form input:focus,
+.edit-form select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.services-section {
+    margin-top: 32px;
+}
+
+.cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px
+}
+
+.card {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ececec;
+    background: var(--card)
+}
+
+.card.you {
+    border-left: 6px solid #2a9d55
+}
+
+.card.other {
+    border-left: 6px solid #d23a3a
+}
+
+.card.service {
+    border-left: 6px solid #3b82f6
+}
+
+.badge {
+    background: #111;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.badge.booked {
+    background: #10b981;
+}
+
+.badge.completed {
+    background: #6b7280;
+}
+
+.badge.cancelled {
+    background: #ef4444;
+}
+
+.price {
+    font-size: 18px;
+    font-weight: 600;
+    color: #059669;
+    margin-top: 8px;
+}
+
+.booking-type {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.employee-info {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.progress {
+    height: 8px;
+    background: #eee;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 8px
+}
+
+.progress .fill {
+    background: linear-gradient(90deg, #2a9d55, #2ecc71);
+    height: 100%
+}
+
+.countdown.warning {
+    color: #d97706
+}
+
+.countdown.critical {
+    color: #b91c1c
+}
+
+/* Simple clean profile UI for user's bookings */
+.userprof-root {
+    max-width: 1000px;
+    margin: 26px auto;
+    padding: 20px;
+    font-family: Inter, system-ui, Arial;
+    color: var(--text)
+}
+
+.userprof-root h2 {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+    font-weight: 800;
+    letter-spacing: -0.5px
+}
+
+.userprof-root .muted {
+    color: var(--muted);
+    margin-bottom: 24px;
+    font-size: 0.95rem
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px
+}
+
+.card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: 0 4px 20px rgba(2, 6, 23, 0.04);
+    border: 1px solid rgba(2, 6, 23, 0.05);
+    border-left: 6px solid transparent;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(2, 6, 23, 0.08);
+}
+
+.card.you {
+    border-left-color: var(--success)
+}
+
+.card.other {
+    border-left-color: var(--danger)
+}
+
+.card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px
+}
+
+.lot-label {
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.slot-label {
+    color: var(--muted);
+    font-size: 0.95rem
+}
+
+.vehicle-label {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(127, 90, 240, 0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    display: inline-block;
+    width: fit-content;
+}
+
+.card-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end
+}
+
+.card-right .time {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 500
+}
+
+.card-right .remaining {
+    margin-top: 8px
+}
+
+.card-right .countdown {
+    font-weight: 700;
+    color: var(--text);
+    background: rgba(2, 6, 23, 0.04);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-variant-numeric: tabular-nums
+}
+
+.card-right .expired {
+    color: var(--muted);
+    font-weight: 600;
+    background: rgba(2, 6, 23, 0.04);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem
+}
+
+/* Badge */
+.badge {
+    display: inline-block;
+    background: var(--accent-1);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.5px
+}
+
+/* Progress bar */
+.progress {
+    height: 6px;
+    background: rgba(2, 6, 23, 0.05);
+    border-radius: 99px;
+    margin-top: 10px;
+    overflow: hidden;
+    width: 100%;
+    min-width: 120px
+}
+
+.progress .fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-1), var(--success));
+    width: 0;
+    transition: width .6s linear;
+    border-radius: 99px
+}
+
+.card.other .progress .fill {
+    background: linear-gradient(90deg, #fb7185, #ef4444)
+}
+
+.card.you .progress .fill {
+    background: linear-gradient(90deg, var(--success), #34d399)
+}
+
+/* Countdown color states */
+.countdown.warning {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.1)
+}
+
+.countdown.critical {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1)
+}
+
+.empty {
+    padding: 20px;
+    color: var(--muted);
+    text-align: center;
+    background: rgba(2, 6, 23, 0.02);
+    border-radius: 12px;
+    font-style: italic
+}
+
+.services-for-booking {
+    margin-top: 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end
+}
+
+.service-pill {
+    background: rgba(127, 90, 240, 0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.8rem
+}
+
+@media(max-width:760px) {
+    .cards {
+        grid-template-columns: 1fr
+    }
+
+    .card {
+        padding: 16px
+    }
+}
