@@ -29,10 +29,23 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
+      console.log('🔐 401 Unauthorized - Token invalid or expired');
+      
+      // Clear auth data
+      const wasAuthenticated = !!localStorage.getItem('authToken');
       localStorage.removeItem('authToken');
       localStorage.removeItem('userRole');
       localStorage.removeItem('userId');
-      window.location.href = '/login';
+      localStorage.removeItem('username');
+      
+      // Only redirect if user was previously authenticated (not just missing token)
+      if (wasAuthenticated) {
+        console.log('🔄 Redirecting to login due to expired session');
+        // Use a small delay to allow state updates before redirect
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
     }
     return Promise.reject(error);
   }

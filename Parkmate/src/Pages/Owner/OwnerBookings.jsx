@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
 import './Owner.scss'
@@ -8,30 +8,43 @@ const OwnerBookings = () => {
     const [bookings, setBookings] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [filter, setFilter] = useState('all') // all, Booked, Completed, Cancelled
+    const [filter, setFilter] = useState('all') // all, booked, completed, cancelled
+    const refreshIntervalRef = useRef(null)
 
     // Load bookings from backend
-    useEffect(() => {
-        const loadBookings = async () => {
-            try {
-                setLoading(true)
-                setError(null)
+    const loadBookings = async () => {
+        try {
+            setLoading(true)
+            setError(null)
 
-                console.log('📋 Loading owner bookings...')
-                const bookingsData = await parkingService.getBookings()
-                console.log('✅ Bookings loaded:', bookingsData)
+            console.log('📋 Loading owner bookings...')
+            const bookingsData = await parkingService.getBookings()
+            console.log('✅ Bookings loaded:', bookingsData)
 
-                setBookings(bookingsData)
-            } catch (err) {
-                console.error('❌ Error loading bookings:', err)
-                setError('Failed to load bookings')
-            } finally {
-                setLoading(false)
-            }
+            setBookings(bookingsData)
+        } catch (err) {
+            console.error('❌ Error loading bookings:', err)
+            setError('Failed to load bookings')
+        } finally {
+            setLoading(false)
         }
+    }
 
+    useEffect(() => {
         if (owner?.role === 'Owner') {
             loadBookings()
+
+            // Set up auto-refresh every 10 seconds to check for expired bookings
+            refreshIntervalRef.current = setInterval(() => {
+                console.log('🔄 Auto-refreshing bookings...')
+                loadBookings()
+            }, 10000)
+        }
+
+        return () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current)
+            }
         }
     }, [owner])
 
@@ -47,17 +60,21 @@ const OwnerBookings = () => {
         return dateB - dateA
     })
 
-    const handleStatusUpdate = async (bookingId, newStatus) => {
+    const handleCancelBooking = async (bookingId) => {
         try {
-            console.log('📝 Updating booking status:', { bookingId, newStatus })
-            const response = await parkingService.updateBooking(bookingId, { status: newStatus })
-            console.log('✅ Booking updated:', response)
+            if (!window.confirm('Are you sure you want to cancel this booking?')) {
+                return
+            }
+            
+            console.log('🗑️ Cancelling booking:', bookingId)
+            const response = await parkingService.cancelBooking(bookingId)
+            console.log('✅ Booking cancelled:', response)
 
             setBookings(bookings.map(b => b.booking_id === bookingId ? response : b))
-            alert(`✅ Booking status updated to ${newStatus}`)
+            alert('✅ Booking cancelled successfully')
         } catch (err) {
-            console.error('❌ Error updating booking:', err)
-            alert('Failed to update booking: ' + (err.response?.data?.error || err.message))
+            console.error('❌ Error cancelling booking:', err)
+            alert('Failed to cancel booking: ' + (err.response?.data?.error || err.message))
         }
     }
 
@@ -84,8 +101,30 @@ const OwnerBookings = () => {
     return (
         <div className="owner-bookings">
             <header className="page-header">
-                <h1>📅 Manage Bookings</h1>
-                <p className="subtitle">View and manage all bookings for your parking lots</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <h1>📅 Manage Bookings</h1>
+                        <p className="subtitle">View and manage all bookings for your parking lots</p>
+                    </div>
+                    <button
+                        onClick={loadBookings}
+                        style={{
+                            padding: '10px 16px',
+                            background: '#3b82f6',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseOver={(e) => e.target.style.background = '#2563eb'}
+                        onMouseOut={(e) => e.target.style.background = '#3b82f6'}
+                    >
+                        🔄 Refresh
+                    </button>
+                </div>
             </header>
 
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -106,49 +145,49 @@ const OwnerBookings = () => {
                     All ({bookings.length})
                 </button>
                 <button 
-                    className={`filter-btn ${filter === 'Booked' ? 'active' : ''}`} 
-                    onClick={() => setFilter('Booked')}
+                    className={`filter-btn ${filter === 'booked' ? 'active' : ''}`} 
+                    onClick={() => setFilter('booked')}
                     style={{
                         padding: '10px 16px',
                         borderRadius: '8px',
-                        border: filter === 'Booked' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                        background: filter === 'Booked' ? '#eff6ff' : '#fff',
-                        color: filter === 'Booked' ? '#3b82f6' : '#64748b',
+                        border: filter === 'booked' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                        background: filter === 'booked' ? '#eff6ff' : '#fff',
+                        color: filter === 'booked' ? '#3b82f6' : '#64748b',
                         cursor: 'pointer',
-                        fontWeight: filter === 'Booked' ? '600' : '500'
+                        fontWeight: filter === 'booked' ? '600' : '500'
                     }}
                 >
-                    Booked ({bookings.filter(b => b.status === 'Booked').length})
+                    Booked ({bookings.filter(b => b.status?.toLowerCase() === 'booked').length})
                 </button>
                 <button 
-                    className={`filter-btn ${filter === 'Completed' ? 'active' : ''}`} 
-                    onClick={() => setFilter('Completed')}
+                    className={`filter-btn ${filter === 'completed' ? 'active' : ''}`} 
+                    onClick={() => setFilter('completed')}
                     style={{
                         padding: '10px 16px',
                         borderRadius: '8px',
-                        border: filter === 'Completed' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                        background: filter === 'Completed' ? '#eff6ff' : '#fff',
-                        color: filter === 'Completed' ? '#3b82f6' : '#64748b',
+                        border: filter === 'completed' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                        background: filter === 'completed' ? '#eff6ff' : '#fff',
+                        color: filter === 'completed' ? '#3b82f6' : '#64748b',
                         cursor: 'pointer',
-                        fontWeight: filter === 'Completed' ? '600' : '500'
+                        fontWeight: filter === 'completed' ? '600' : '500'
                     }}
                 >
-                    Completed ({bookings.filter(b => b.status === 'Completed').length})
+                    Completed ({bookings.filter(b => b.status?.toLowerCase() === 'completed').length})
                 </button>
                 <button 
-                    className={`filter-btn ${filter === 'Cancelled' ? 'active' : ''}`} 
-                    onClick={() => setFilter('Cancelled')}
+                    className={`filter-btn ${filter === 'cancelled' ? 'active' : ''}`} 
+                    onClick={() => setFilter('cancelled')}
                     style={{
                         padding: '10px 16px',
                         borderRadius: '8px',
-                        border: filter === 'Cancelled' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                        background: filter === 'Cancelled' ? '#eff6ff' : '#fff',
-                        color: filter === 'Cancelled' ? '#3b82f6' : '#64748b',
+                        border: filter === 'cancelled' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                        background: filter === 'cancelled' ? '#eff6ff' : '#fff',
+                        color: filter === 'cancelled' ? '#3b82f6' : '#64748b',
                         cursor: 'pointer',
-                        fontWeight: filter === 'Cancelled' ? '600' : '500'
+                        fontWeight: filter === 'cancelled' ? '600' : '500'
                     }}
                 >
-                    Cancelled ({bookings.filter(b => b.status === 'Cancelled').length})
+                    Cancelled ({bookings.filter(b => b.status?.toLowerCase() === 'cancelled').length})
                 </button>
             </div>
 
@@ -212,37 +251,17 @@ const OwnerBookings = () => {
                                                 borderRadius: '8px',
                                                 fontSize: '0.85rem',
                                                 fontWeight: '600',
-                                                backgroundColor: b.status === 'Booked' ? '#dbeafe' : b.status === 'Completed' ? '#dcfce7' : b.status === 'Cancelled' ? '#fee2e2' : '#fef3c7',
-                                                color: b.status === 'Booked' ? '#1e40af' : b.status === 'Completed' ? '#166534' : b.status === 'Cancelled' ? '#991b1b' : '#92400e'
+                                                backgroundColor: b.status?.toLowerCase() === 'booked' ? '#dbeafe' : b.status?.toLowerCase() === 'completed' ? '#dcfce7' : b.status?.toLowerCase() === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                                                color: b.status?.toLowerCase() === 'booked' ? '#1e40af' : b.status?.toLowerCase() === 'completed' ? '#166534' : b.status?.toLowerCase() === 'cancelled' ? '#991b1b' : '#92400e'
                                             }}>
-                                                {b.status}
+                                                {b.status?.toUpperCase()}
                                             </span>
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'center' }}>
                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                                {b.status === 'Booked' && (
+                                                {b.status?.toLowerCase() === 'booked' && (
                                                     <button 
-                                                        onClick={() => handleStatusUpdate(b.booking_id, 'Completed')}
-                                                        style={{
-                                                            padding: '8px 12px',
-                                                            background: '#10b981',
-                                                            color: '#fff',
-                                                            border: 'none',
-                                                            borderRadius: '6px',
-                                                            cursor: 'pointer',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '600',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                        onMouseOver={(e) => e.target.style.background = '#059669'}
-                                                        onMouseOut={(e) => e.target.style.background = '#10b981'}
-                                                    >
-                                                        ✓ Complete
-                                                    </button>
-                                                )}
-                                                {b.status !== 'Cancelled' && (
-                                                    <button 
-                                                        onClick={() => handleStatusUpdate(b.booking_id, 'Cancelled')}
+                                                        onClick={() => handleCancelBooking(b.booking_id)}
                                                         style={{
                                                             padding: '8px 12px',
                                                             background: '#ef4444',
@@ -259,6 +278,30 @@ const OwnerBookings = () => {
                                                     >
                                                         ✕ Cancel
                                                     </button>
+                                                )}
+                                                {b.status?.toLowerCase() === 'completed' && (
+                                                    <span style={{
+                                                        padding: '8px 12px',
+                                                        background: '#f0fdf4',
+                                                        color: '#166534',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '600'
+                                                    }}>
+                                                        ✓ Completed
+                                                    </span>
+                                                )}
+                                                {b.status?.toLowerCase() === 'cancelled' && (
+                                                    <span style={{
+                                                        padding: '8px 12px',
+                                                        background: '#fef2f2',
+                                                        color: '#991b1b',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '600'
+                                                    }}>
+                                                        ✕ Cancelled
+                                                    </span>
                                                 )}
                                             </div>
                                         </td>

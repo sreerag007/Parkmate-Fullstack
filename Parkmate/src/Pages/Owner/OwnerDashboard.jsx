@@ -39,7 +39,10 @@ const OwnerDashboard = () => {
                 console.log('✅ Lots fetched:', lotsData)
 
                 // Calculate statistics
-                const activeBookings = bookingsData.filter(b => b.status === 'Booked' || b.status === 'booked').length
+                const activeBookings = bookingsData.filter(b => {
+                  const s = b.status?.toLowerCase() || ''
+                  return s === 'booked' || s === 'active' || s === 'scheduled'
+                }).length
                 console.log('📊 Active bookings count:', activeBookings)
                 
                 const totalRevenue = bookingsData.reduce((sum, b) => sum + parseFloat(b.price || 0), 0)

@@ -236,10 +236,40 @@ class P_SlotSerializer(serializers.ModelSerializer):
     lot_detail = PLotNestedSerializer(source="lot",read_only=True)
     lot = serializers.PrimaryKeyRelatedField(queryset=P_Lot.objects.all(), write_only=True)
     vehicle_type = serializers.ChoiceField(choices=VEHICLE_CHOICES)
+    # Include booking details so frontend can calculate timer from end_time
+    booking = serializers.SerializerMethodField()
 
     class Meta:
         model = P_Slot
-        fields = ["slot_id", "lot_detail", "lot", "vehicle_type", "price", "is_available"]
+        fields = ["slot_id", "lot_detail", "lot", "vehicle_type", "price", "is_available", "booking"]
+    
+    def get_booking(self, obj):
+        """Get active booking for this slot if any"""
+        from django.utils import timezone
+        # Get the most recent booking for this slot using the correct related_name
+        # Support both old 'booked' and new 'ACTIVE'/'SCHEDULED' statuses
+        bookings = obj.booking_of_slot.filter(
+            status__in=['booked', 'BOOKED', 'ACTIVE', 'SCHEDULED']
+        ).order_by('-booking_time')
+        
+        if bookings.exists():
+            booking = bookings.first()
+            now = timezone.now()
+            
+            # ✅ Check if booking has expired
+            # If expired, don't return it (slot is available)
+            # The view-level cleanup will mark it as COMPLETED
+            if booking.end_time and booking.end_time <= now:
+                # Booking has expired - return None so slot shows as available
+                return None
+            
+            return {
+                'booking_id': booking.booking_id,
+                'start_time': booking.start_time,
+                'end_time': booking.end_time,
+                'status': booking.status
+            }
+        return None
 
 
 # Booking Serializer
@@ -266,6 +296,33 @@ class PSlotNestedSerializer(serializers.ModelSerializer):
             "lot_detail",
         ]
 
+class CarwashTypeNestedSerializer(serializers.ModelSerializer):
+    """Nested serializer for carwash type details"""
+    class Meta:
+        model = Carwash_type
+        fields = [
+            "carwash_type_id",
+            "name",
+            "description",
+            "price"
+        ]
+
+
+class CarwashNestedSerializer(serializers.ModelSerializer):
+    """Nested serializer to include carwash details in booking"""
+    carwash_type_detail = CarwashTypeNestedSerializer(source="carwash_type", read_only=True)
+    
+    class Meta:
+        model = Carwash
+        fields = [
+            "carwash_id",
+            "carwash_type",
+            "carwash_type_detail",
+            "employee",
+            "price"
+        ]
+
+
 class BookingSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     lot = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -276,6 +333,9 @@ class BookingSerializer(serializers.ModelSerializer):
     user_read = UserProfileNestedSerializer(source="user", read_only=True)
     lot_detail = serializers.SerializerMethodField()
     slot_read = PSlotNestedSerializer(source="slot", read_only=True)
+    is_expired = serializers.SerializerMethodField()
+    remaining_time = serializers.SerializerMethodField()
+    carwash = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -290,11 +350,16 @@ class BookingSerializer(serializers.ModelSerializer):
             "vehicle_number",
             "booking_type",
             "booking_time",
+            "start_time",
+            "end_time",
             "price",
             "status",
+            "is_expired",
+            "remaining_time",
+            "carwash",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash"]
 
     def get_lot_detail(self, obj):
         """Get lot details from the slot"""
@@ -303,16 +368,41 @@ class BookingSerializer(serializers.ModelSerializer):
             return serializer.data
         return None
 
+    def get_is_expired(self, obj):
+        """Check if booking has expired"""
+        return obj.is_expired()
+    
+    def get_remaining_time(self, obj):
+        """Calculate remaining time in seconds until booking expires"""
+        from django.utils import timezone
+        if obj.end_time and obj.status.lower() == 'booked':
+            remaining = (obj.end_time - timezone.now()).total_seconds()
+            return max(0, int(remaining))  # Return seconds, max 0
+        return 0
+
+    def get_carwash(self, obj):
+        """Get the first active carwash service for this booking, if any"""
+        carwash = obj.booking_by_user.first()
+        if carwash:
+            return CarwashNestedSerializer(carwash).data
+        return None
+
     def validate_slot(self, value):
         if not value.is_available:
             raise serializers.ValidationError("Selected slot is not available.")
         return value
 
-    def create(self, validated_data):
+    def create(self, validated_data, **kwargs):
+        """Create a booking with support for extra fields from perform_create"""
         request = self.context.get("request")
         auth_user = request.user
         user_profile = UserProfile.objects.get(auth_user=auth_user)
-        slot = validated_data["slot"]
+        slot = validated_data.get("slot") or kwargs.get("slot")
+        
+        # Get extra fields from kwargs (passed by perform_create)
+        start_time = kwargs.get("start_time")
+        end_time = kwargs.get("end_time")
+        status = kwargs.get("status", "booked")  # Default to 'booked' if not specified
 
         with transaction.atomic():
             price = slot.price
@@ -322,6 +412,9 @@ class BookingSerializer(serializers.ModelSerializer):
                 lot=slot.lot,
                 vehicle_number=validated_data["vehicle_number"],
                 booking_type=validated_data["booking_type"],
+                start_time=start_time,
+                end_time=end_time,
+                status=status,
                 price=price,
             )
             slot.is_available = False
@@ -428,7 +521,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
 class CarwashBookingSerializer(serializers.ModelSerializer):
     class Meta:
         model= Booking
-        fields = ["booking_id", "booking_type", "price"]
+        fields = ["booking_id", "booking_type", "price", "booking_time", "start_time", "end_time", "status", "vehicle_number", "is_expired"]
 
 
 class EmployeeNestedSerializer(serializers.ModelSerializer):
@@ -437,14 +530,31 @@ class EmployeeNestedSerializer(serializers.ModelSerializer):
         fields = ["employee_id", "firstname", "lastname", "latitude", "longitude"]
 
 
-# class SimpleServicesSerializer(serializers.ModelSerializer):
-# class Meta:
-# model=Services
-# fields=['service_id','service_name','price']
 class CarwashTypeNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Carwash_type
         fields = ["carwash_type_id", "name", "price"]
+
+
+class CarwashUserNestedSerializer(serializers.ModelSerializer):
+    """Nested user data for carwash"""
+    class Meta:
+        model = UserProfile
+        fields = ["id", "firstname", "lastname", "phone", "vehicle_number"]
+
+
+class CarwashLotNestedSerializer(serializers.ModelSerializer):
+    """Nested lot data for carwash"""
+    class Meta:
+        model = P_Lot
+        fields = ["lot_id", "lot_name", "streetname", "locality", "city"]
+
+
+class CarwashSlotNestedSerializer(serializers.ModelSerializer):
+    """Nested slot data for carwash"""
+    class Meta:
+        model = P_Slot
+        fields = ["slot_id", "vehicle_type", "price"]
 
 
 class CarwashSerializer(serializers.ModelSerializer):
@@ -457,23 +567,49 @@ class CarwashSerializer(serializers.ModelSerializer):
     employee_read = EmployeeNestedSerializer(source="employee", read_only=True)
     booking_read = CarwashBookingSerializer(source="booking", read_only=True)
     carwash_type_read = CarwashTypeNestedSerializer(source="carwash_type", read_only=True)
+    
+    # Enhanced: Add user, lot, and slot details
+    user_read = serializers.SerializerMethodField()
+    lot_read = serializers.SerializerMethodField()
+    slot_read = serializers.SerializerMethodField()
 
-    # the above is a virtual field
-    # service=SimpleServicesSerializer(read_only=True)
-    # service_id=serializers.PrimaryKeyRelatedField(queryset=Services.objects.all())
     class Meta:
         model = Carwash
         fields = [
+            "carwash_id",
             "booking",
             "booking_read",
-            #'service',
-            #'service_id',
             "employee",
             "employee_read",
             "carwash_type",
             "carwash_type_read",
+            "price",
+            "user_read",
+            "lot_read",
+            "slot_read",
         ]
         read_only_fields = ["carwash_id", "price"]
+
+    def get_user_read(self, obj):
+        """Extract user details from booking"""
+        if obj.booking and obj.booking.user:
+            serializer = CarwashUserNestedSerializer(obj.booking.user)
+            return serializer.data
+        return None
+
+    def get_lot_read(self, obj):
+        """Extract lot details from booking"""
+        if obj.booking and obj.booking.lot:
+            serializer = CarwashLotNestedSerializer(obj.booking.lot)
+            return serializer.data
+        return None
+
+    def get_slot_read(self, obj):
+        """Extract slot details from booking"""
+        if obj.booking and obj.booking.slot:
+            serializer = CarwashSlotNestedSerializer(obj.booking.slot)
+            return serializer.data
+        return None
 
     def create(self, validated_data):
         carwash_type = validated_data["carwash_type"]

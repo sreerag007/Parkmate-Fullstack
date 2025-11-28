@@ -1,0 +1,282 @@
+// Multi-Booking Timer Component Styles
+.multi-booking-container {
+  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0e7fe 100%);
+  border-radius: 12px;
+  border-left: 4px solid #0369a1;
+
+  .bookings-header {
+    margin-bottom: 15px;
+
+    h5 {
+      margin: 0 0 8px 0;
+      color: #0369a1;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .bookings-count {
+      margin: 0;
+      font-size: 13px;
+      color: #0c4a6e;
+      font-weight: 500;
+    }
+  }
+
+  .bookings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+// Individual Booking Card
+.booking-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+  border: 2px solid #e0f2fe;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  &:hover {
+    border-color: #0369a1;
+    box-shadow: 0 4px 12px rgba(3, 105, 161, 0.15);
+    transform: translateY(-2px);
+  }
+
+  &.expiring-soon {
+    border-color: #ea580c;
+    background: #fff7ed;
+
+    .timer-display {
+      animation: pulse-animation 1.5s ease-in-out infinite;
+    }
+  }
+
+  .booking-card-header {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e7ff;
+
+    .booking-info {
+      .lot-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #0c4a6e;
+        margin-bottom: 4px;
+      }
+
+      .slot-id {
+        font-size: 12px;
+        color: #0369a1;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .booking-card-content {
+    margin-bottom: 12px;
+
+    .vehicle-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #334155;
+
+      .label {
+        font-size: 14px;
+      }
+
+      .value {
+        font-weight: 500;
+        color: #0c4a6e;
+      }
+    }
+
+    .timer-display {
+      padding: 12px;
+      background: linear-gradient(135deg, #f0f9ff 0%, #f5f3ff 100%);
+      border-radius: 8px;
+      text-align: center;
+
+      .time-value {
+        font-size: 28px;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        color: #0369a1;
+        letter-spacing: 2px;
+      }
+
+      .warning-badge {
+        font-size: 12px;
+        color: #ea580c;
+        font-weight: 600;
+        margin-top: 6px;
+        animation: pulse-text 1.5s ease-in-out infinite;
+      }
+
+      .expired-text {
+        font-size: 16px;
+        color: #64748b;
+        font-weight: 600;
+        padding: 8px 0;
+      }
+
+      &.pulse {
+        animation: pulse-animation 1.5s ease-in-out infinite;
+      }
+    }
+  }
+
+  .booking-card-actions {
+    display: flex;
+    gap: 8px;
+
+    .btn-timer {
+      flex: 1;
+      padding: 8px 12px;
+      background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(3, 105, 161, 0.3);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+  }
+}
+
+// Animations
+@keyframes pulse-animation {
+  0% {
+    background-color: rgba(234, 88, 12, 0.05);
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.3);
+  }
+  50% {
+    background-color: rgba(234, 88, 12, 0.1);
+    box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.15);
+  }
+  100% {
+    background-color: rgba(234, 88, 12, 0.05);
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
+  }
+}
+
+@keyframes pulse-text {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .multi-booking-container {
+    padding: 12px;
+    margin-top: 15px;
+
+    .bookings-header {
+      h5 {
+        font-size: 15px;
+      }
+    }
+
+    .bookings-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .booking-card {
+    padding: 10px;
+
+    .booking-card-content {
+      .timer-display {
+        .time-value {
+          font-size: 24px;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .multi-booking-container {
+    padding: 10px;
+    border-left-width: 3px;
+
+    .bookings-header {
+      h5 {
+        font-size: 14px;
+      }
+
+      .bookings-count {
+        font-size: 12px;
+      }
+    }
+  }
+
+  .booking-card {
+    padding: 8px;
+
+    .booking-card-header {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+
+      .booking-info {
+        .lot-name {
+          font-size: 13px;
+        }
+
+        .slot-id {
+          font-size: 11px;
+        }
+      }
+    }
+
+    .booking-card-content {
+      margin-bottom: 10px;
+
+      .timer-display {
+        padding: 10px;
+
+        .time-value {
+          font-size: 22px;
+          letter-spacing: 1px;
+        }
+
+        .warning-badge {
+          font-size: 11px;
+        }
+      }
+    }
+
+    .booking-card-actions {
+      .btn-timer {
+        font-size: 11px;
+        padding: 6px 10px;
+      }
+    }
+  }
+}

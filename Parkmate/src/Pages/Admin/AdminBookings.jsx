@@ -37,21 +37,35 @@ const AdminBookings = () => {
     const handleStatusChange = async (bookingId, newStatus) => {
         try {
             setActionLoading(true)
+            console.log(`📝 Changing booking ${bookingId} status to ${newStatus}...`)
+            
             await api.patch(`/bookings/${bookingId}/`, { 
                 status: newStatus 
             })
+            console.log(`✅ Booking ${bookingId} status changed to ${newStatus}`)
+            
+            if (newStatus.toLowerCase() === 'cancelled') {
+                console.log(`✅ Slot associated with booking ${bookingId} should now be AVAILABLE`)
+            }
+            
             setBookings(bookings.map(b => 
                 b.booking_id === bookingId ? { ...b, status: newStatus } : b
             ))
             if (selectedBooking?.booking_id === bookingId) {
                 setSelectedBooking({ ...selectedBooking, status: newStatus })
             }
-            setSuccessMessage(`Booking status changed to ${newStatus}!`)
-            setTimeout(() => setSuccessMessage(null), 3000)
+            
+            const message = newStatus.toLowerCase() === 'cancelled' 
+                ? `Booking cancelled! The slot is now available.`
+                : `Booking status changed to ${newStatus}!`
+            
+            setSuccessMessage(message)
+            setTimeout(() => setSuccessMessage(null), 4000)
         } catch (err) {
-            console.error('Error updating booking status:', err)
-            setError('Failed to update booking status')
-            setTimeout(() => setError(null), 3000)
+            console.error('❌ Error updating booking status:', err)
+            console.error('❌ Error response:', err.response?.data)
+            setError('Failed to update booking status: ' + (err.response?.data?.detail || err.message))
+            setTimeout(() => setError(null), 4000)
         } finally {
             setActionLoading(false)
         }
@@ -65,9 +79,14 @@ const AdminBookings = () => {
     const confirmCancelBooking = async () => {
         try {
             setActionLoading(true)
-            await api.patch(`/bookings/${cancellingBookingId}/`, { 
+            console.log(`🗑️ Admin cancelling booking ${cancellingBookingId}...`)
+            
+            const response = await api.patch(`/bookings/${cancellingBookingId}/`, { 
                 status: 'cancelled'
             })
+            console.log(`✅ Booking ${cancellingBookingId} cancelled successfully`, response)
+            console.log(`✅ Associated slot status should now be AVAILABLE`)
+            
             setBookings(bookings.map(b => 
                 b.booking_id === cancellingBookingId ? { ...b, status: 'cancelled' } : b
             ))
@@ -77,12 +96,13 @@ const AdminBookings = () => {
             }
             setShowCancelConfirm(false)
             setCancellingBookingId(null)
-            setSuccessMessage('Booking cancelled successfully!')
-            setTimeout(() => setSuccessMessage(null), 3000)
+            setSuccessMessage('Booking cancelled successfully! The slot is now available for other users.')
+            setTimeout(() => setSuccessMessage(null), 4000)
         } catch (err) {
-            console.error('Error cancelling booking:', err)
-            setError('Failed to cancel booking')
-            setTimeout(() => setError(null), 3000)
+            console.error('❌ Error cancelling booking:', err)
+            console.error('❌ Error response:', err.response?.data)
+            setError('Failed to cancel booking: ' + (err.response?.data?.detail || err.message))
+            setTimeout(() => setError(null), 4000)
         } finally {
             setActionLoading(false)
         }

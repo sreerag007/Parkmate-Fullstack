@@ -9,6 +9,10 @@ const OwnerLots = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [selectedLot, setSelectedLot] = useState(null);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [lotSlots, setLotSlots] = useState([]);
+    const [slotsLoading, setSlotsLoading] = useState(false);
     const [newLot, setNewLot] = useState({
         lot_name: '',
         streetname: '',
@@ -20,6 +24,11 @@ const OwnerLots = () => {
     });
     const [formError, setFormError] = useState('');
     const [editingLot, setEditingLot] = useState(null);
+    const [showAddSlotForm, setShowAddSlotForm] = useState(false);
+    const [newSlot, setNewSlot] = useState({
+        vehicle_type: 'Sedan',
+        price: ''
+    });
 
     // Load lots from backend
     useEffect(() => {
@@ -121,6 +130,72 @@ const OwnerLots = () => {
             } catch (err) {
                 console.error('❌ Error deleting lot:', err);
                 alert('Failed to delete lot: ' + (err.response?.data?.error || err.message));
+            }
+        }
+    };
+
+    const handleViewDetails = async (lot) => {
+        try {
+            setSlotsLoading(true);
+            setSelectedLot(lot);
+            console.log('📍 Loading slots for lot:', lot.lot_id);
+            
+            // Fetch slots for this lot
+            const allSlots = await parkingService.getSlots();
+            const lotsSlots = allSlots.filter(slot => slot.lot_detail?.lot_id === lot.lot_id);
+            
+            console.log('✅ Slots loaded:', lotsSlots);
+            setLotSlots(lotsSlots);
+            setShowDetailsModal(true);
+        } catch (err) {
+            console.error('❌ Error loading lot details:', err);
+            alert('Failed to load lot details: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setSlotsLoading(false);
+        }
+    };
+
+    const handleAddSlot = async (e) => {
+        e.preventDefault();
+
+        if (!newSlot.price || newSlot.price <= 0) {
+            alert('Price must be greater than 0');
+            return;
+        }
+
+        try {
+            console.log('➕ Adding new slot:', { lot: selectedLot.lot_id, ...newSlot });
+            const slotData = {
+                lot: selectedLot.lot_id,
+                vehicle_type: newSlot.vehicle_type,
+                price: parseFloat(newSlot.price)
+            };
+
+            const response = await parkingService.createSlot(slotData);
+            console.log('✅ Slot created:', response);
+
+            setLotSlots([...lotSlots, response]);
+            setNewSlot({ vehicle_type: 'Sedan', price: '' });
+            setShowAddSlotForm(false);
+            alert('✅ Parking slot created successfully!');
+        } catch (err) {
+            console.error('❌ Error creating slot:', err);
+            alert('Failed to create slot: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    const handleDeleteSlot = async (slotId) => {
+        if (window.confirm('Are you sure you want to delete this slot?')) {
+            try {
+                console.log('🗑️ Deleting slot:', slotId);
+                await parkingService.deleteSlot(slotId);
+                console.log('✅ Slot deleted');
+
+                setLotSlots(lotSlots.filter(slot => slot.slot_id !== slotId));
+                alert('✅ Parking slot deleted successfully!');
+            } catch (err) {
+                console.error('❌ Error deleting slot:', err);
+                alert('Failed to delete slot: ' + (err.response?.data?.error || err.message));
             }
         }
     };
@@ -342,7 +417,10 @@ const OwnerLots = () => {
                             </div>
 
                             <div className="lot-card-actions">
-                                <button className="btn-manage">
+                                <button 
+                                    className="btn-manage"
+                                    onClick={() => handleViewDetails(lot)}
+                                >
                                     <span className="btn-icon">⚙️</span>
                                     View Details
                                 </button>
@@ -358,6 +436,148 @@ const OwnerLots = () => {
                     ))
                 )}
             </div>
+
+            {/* Lot Details Modal */}
+            {showDetailsModal && selectedLot && (
+                <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>🅿️ {selectedLot.lot_name} - Details</h2>
+                            <button 
+                                className="modal-close"
+                                onClick={() => setShowDetailsModal(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="modal-body">
+                            {/* Lot Information */}
+                            <div className="details-section">
+                                <h3>Lot Information</h3>
+                                <div className="info-grid">
+                                    <div className="info-item">
+                                        <label>Lot Name</label>
+                                        <p>{selectedLot.lot_name}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Address</label>
+                                        <p>{selectedLot.streetname}, {selectedLot.locality}, {selectedLot.city}, {selectedLot.state} {selectedLot.pincode}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Total Slots</label>
+                                        <p>{selectedLot.total_slots}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Available Slots</label>
+                                        <p>{selectedLot.available_slots || 0}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Parking Slots */}
+                            <div className="details-section">
+                                <div className="section-header">
+                                    <h3>Parking Slots ({lotSlots.length})</h3>
+                                    <button 
+                                        className="btn-add-slot"
+                                        onClick={() => setShowAddSlotForm(!showAddSlotForm)}
+                                    >
+                                        {showAddSlotForm ? '✕ Cancel' : '+ Add Slot'}
+                                    </button>
+                                </div>
+
+                                {/* Add Slot Form */}
+                                {showAddSlotForm && (
+                                    <div className="add-slot-form">
+                                        <h4>Create New Parking Slot</h4>
+                                        <form onSubmit={handleAddSlot}>
+                                            <div className="form-row">
+                                                <div className="form-group">
+                                                    <label>Vehicle Type</label>
+                                                    <select
+                                                        value={newSlot.vehicle_type}
+                                                        onChange={(e) => setNewSlot({ ...newSlot, vehicle_type: e.target.value })}
+                                                    >
+                                                        <option value="Hatchback">Hatchback</option>
+                                                        <option value="Sedan">Sedan</option>
+                                                        <option value="SUV">SUV</option>
+                                                        <option value="Three-Wheeler">Three-Wheeler</option>
+                                                        <option value="Two-Wheeler">Two-Wheeler</option>
+                                                    </select>
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Price (₹)</label>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Enter price"
+                                                        value={newSlot.price}
+                                                        onChange={(e) => setNewSlot({ ...newSlot, price: e.target.value })}
+                                                        step="0.01"
+                                                        min="0"
+                                                        required
+                                                    />
+                                                </div>
+                                            </div>
+                                            <button type="submit" className="btn-save-changes">
+                                                Create Slot
+                                            </button>
+                                        </form>
+                                    </div>
+                                )}
+
+                                {/* Slots List */}
+                                {slotsLoading ? (
+                                    <p style={{ textAlign: 'center', padding: '20px' }}>Loading slots...</p>
+                                ) : lotSlots.length === 0 ? (
+                                    <p style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                                        No slots created yet. Add one to get started!
+                                    </p>
+                                ) : (
+                                    <div className="slots-table">
+                                        <div className="table-header">
+                                            <div className="col-slot-id">Slot ID</div>
+                                            <div className="col-vehicle">Vehicle Type</div>
+                                            <div className="col-price">Price</div>
+                                            <div className="col-status">Status</div>
+                                            <div className="col-actions">Actions</div>
+                                        </div>
+                                        {lotSlots.map(slot => (
+                                            <div key={slot.slot_id} className="table-row">
+                                                <div className="col-slot-id">#{slot.slot_id}</div>
+                                                <div className="col-vehicle">{slot.vehicle_type}</div>
+                                                <div className="col-price">₹{slot.price}</div>
+                                                <div className="col-status">
+                                                    <span className={`status-badge ${slot.is_available ? 'available' : 'booked'}`}>
+                                                        {slot.is_available ? '✓ Available' : '✗ Booked'}
+                                                    </span>
+                                                </div>
+                                                <div className="col-actions">
+                                                    <button
+                                                        className="btn-slot-delete"
+                                                        onClick={() => handleDeleteSlot(slot.slot_id)}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer">
+                            <button 
+                                className="btn-close"
+                                onClick={() => setShowDetailsModal(false)}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

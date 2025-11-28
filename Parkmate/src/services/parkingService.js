@@ -25,6 +25,11 @@ const parkingService = {
     return response.data;
   },
 
+  getOwnerLots: async (ownerId) => {
+    const response = await api.get(`/owner-profiles/${ownerId}/lots/`);
+    return response.data;
+  },
+
   // ===== ADMIN - USERS =====
   getUsers: async () => {
     const response = await api.get('/user-profiles/');
@@ -104,6 +109,16 @@ const parkingService = {
     return response.data;
   },
 
+  cancelBooking: async (id) => {
+    const response = await api.post(`/bookings/${id}/cancel/`);
+    return response.data;
+  },
+
+  renewBooking: async (id) => {
+    const response = await api.post(`/bookings/${id}/renew/`);
+    return response.data;
+  },
+
   // ===== PAYMENTS =====
   getPayments: async () => {
     const response = await api.get('/payments/');
@@ -130,6 +145,11 @@ const parkingService = {
   // ===== CAR WASH =====
   getCarwashes: async () => {
     const response = await api.get('/carwashes/');
+    return response.data;
+  },
+
+  getOwnerCarwashes: async () => {
+    const response = await api.get('/carwashes/owner_services/');
     return response.data;
   },
 

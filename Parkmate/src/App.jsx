@@ -4,6 +4,7 @@ import ProtectedRoute from './Components/ProtectedRoute'
 import UserLand from './Pages/Users/Userland'
 import Lots from './Pages/Users/Lots'
 import DynamicLot from './Pages/Users/DynamicLot'
+import BookingConfirmation from './Pages/Users/BookingConfirmation'
 import Userprof from './Pages/Users/Userprof'
 import Service from './Pages/Users/Service'
 import Navbar from './Components/Nav/Navbar'
@@ -50,6 +51,7 @@ function App() {
 
                 <Route path="/lots" element={<Lots />} />
                 <Route path="/lots/:lotId" element={<DynamicLot />} />
+                <Route path="/booking-confirmation" element={<BookingConfirmation />} />
                 <Route path="/service" element={<Service />} />
 
                 {/* Protected User Routes (Optional, but good for profile) */}

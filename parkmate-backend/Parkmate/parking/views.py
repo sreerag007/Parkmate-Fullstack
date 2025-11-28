@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework import serializers
 from django.contrib.auth import logout, authenticate
 from rest_framework.parsers import MultiPartParser, FormParser,JSONParser
+from rest_framework.decorators import action
 
 from .models import (AuthUser, UserProfile, P_Lot, P_Slot, OwnerProfile, Booking,
                      Payment, Tasks, Carwash, Carwash_type, Employee, Review)
@@ -130,7 +131,18 @@ class AuthViewSet(ViewSet):
         logout(request)
         return Response({
             "message":"Logged Out Successfully"
-        }) 
+        })
+    
+    def verify(self, request):
+        """Verify that the current token is still valid (used for session keep-alive)"""
+        # This endpoint requires authentication, so if we get here, token is valid
+        auth_user = request.user
+        return Response({
+            "message": "Token is valid",
+            "user": auth_user.username,
+            "role": auth_user.role,
+            "is_authenticated": auth_user.is_authenticated
+        }, status=status.HTTP_200_OK) 
            
 class UserProfileViewSet(ModelViewSet):
     queryset=UserProfile.objects.all()
@@ -236,7 +248,36 @@ class OwnerProfileViewSet(ModelViewSet):
         return Response(
             {'detail': 'Owner profile deleted successfully.'},
             status=status.HTTP_204_NO_CONTENT
-        )    
+        )
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def lots(self, request, pk=None):
+        """Get all parking lots owned by a specific owner"""
+        try:
+            owner = self.get_object()
+            lots = P_Lot.objects.filter(owner=owner)
+            
+            print(f"📍 Fetching lots for owner {owner.id} ({owner.firstname} {owner.lastname})")
+            print(f"📍 Found {lots.count()} lots")
+            
+            serializer = P_LotSerializer(lots, many=True)
+            return Response({
+                'owner_id': owner.id,
+                'owner_name': f"{owner.firstname} {owner.lastname}",
+                'lots': serializer.data,
+                'total_lots': lots.count()
+            })
+        except OwnerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Owner not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"❌ Error fetching lots: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )    
 
 
 #P_LotViewsets
@@ -278,6 +319,60 @@ class P_SlotViewSet(ModelViewSet):
             return P_Slot.objects.filter(lot__owner=owner)
         return P_Slot.objects.filter(lot__owner__verification_status="APPROVED")
     
+    def list(self, request, *args, **kwargs):
+        """Auto-complete expired bookings and free up slots before returning list"""
+        from django.utils import timezone
+        
+        print(f"\n{'='*60}")
+        print(f"📊 SLOTS LIST ENDPOINT - Auto-completing expired bookings")
+        print(f"{'='*60}")
+        
+        # Auto-complete any expired bookings with 'booked' status
+        expired_bookings = Booking.objects.filter(
+            status='booked',
+            end_time__lt=timezone.now()
+        )
+        
+        print(f"🔍 Found {expired_bookings.count()} expired bookings to complete")
+        
+        for booking in expired_bookings:
+            print(f"⏰ Auto-completing expired booking {booking.booking_id}")
+            print(f"   Status: {booking.status} → completed")
+            print(f"   Slot: {booking.slot.slot_id} → is_available = True")
+            
+            booking.status = 'completed'
+            
+            # Auto-clear carwash when booking completes
+            carwash_services = booking.booking_by_user.all()
+            if carwash_services.exists():
+                print(f"🧼 Auto-clearing {carwash_services.count()} carwash service(s)")
+                carwash_services.delete()
+            
+            booking.save()
+            
+            # Free up the slot
+            booking.slot.is_available = True
+            booking.slot.save()
+            print(f"✅ Booking {booking.booking_id} completed and slot freed\n")
+        
+        # Also free up slots for cancelled bookings that still have is_available=False
+        cancelled_bookings = Booking.objects.filter(
+            status='cancelled',
+            slot__is_available=False
+        )
+        
+        print(f"🔍 Found {cancelled_bookings.count()} cancelled bookings with unavailable slots to free")
+        
+        for booking in cancelled_bookings:
+            print(f"🗑️  Freeing slot for cancelled booking {booking.booking_id}")
+            print(f"   Slot: {booking.slot.slot_id} → is_available = True")
+            
+            booking.slot.is_available = True
+            booking.slot.save()
+            print(f"✅ Slot {booking.slot.slot_id} freed for cancelled booking {booking.booking_id}\n")
+        
+        return super().list(request, *args, **kwargs)
+    
     def perform_create(self, serializer):
         owner=OwnerProfile.objects.get(auth_user=self.request.user)
         lot=serializer.validated_data["lot"]
@@ -299,19 +394,372 @@ class BookingViewSet(ModelViewSet):
         
         if user.role=="Owner":
             owner=OwnerProfile.objects.get(auth_user=user)
-            return Booking.objects.filter(lot__owner=owner)
+            bookings = Booking.objects.filter(lot__owner=owner)
+            # Auto-complete expired bookings
+            self._auto_complete_expired(bookings)
+            return bookings
+        
+        if user.role=="Admin":
+            return Booking.objects.all()
         return Booking.objects.all()
         
+    def _auto_complete_expired(self, bookings):
+        """Auto-complete bookings that have expired and clear associated carwash services"""
+        from django.utils import timezone
+        # Auto-complete bookings when their end_time is reached
+        expired_bookings = bookings.filter(
+            status='booked',
+            end_time__lt=timezone.now()
+        )
+        for booking in expired_bookings:
+            print(f"⏰ Auto-completing expired booking {booking.booking_id} (status: {booking.status})")
+            booking.status = 'completed'
+            booking.slot.is_available = True
+            
+            # Auto-clear carwash service when booking completes
+            carwash_services = booking.booking_by_user.all()
+            if carwash_services.exists():
+                print(f"🧼 Auto-clearing {carwash_services.count()} carwash service(s) for booking {booking.booking_id}")
+                carwash_services.delete()
+            
+            booking.slot.save()
+            booking.save()
+
+    def retrieve(self, request, *args, **kwargs):
+        """Override retrieve to auto-complete expired bookings"""
+        response = super().retrieve(request, *args, **kwargs)
+        booking_id = kwargs.get('pk')
+        try:
+            booking = Booking.objects.get(pk=booking_id)
+            from django.utils import timezone
+            from datetime import timedelta
+            now = timezone.now()
+            
+            # ✅ AUTO-FIX MISSING END_TIME (legacy data)
+            if booking.end_time is None and booking.start_time:
+                print(f"\n   ⚠️  FIXING: Booking {booking.booking_id} has missing end_time!")
+                booking.end_time = booking.start_time + timedelta(hours=1)
+                booking.save()
+                print(f"   ✅ Set end_time to {booking.end_time}")
+            
+            print(f"\n📋 RETRIEVE BOOKING {booking.booking_id}")
+            print(f"   Status: {booking.status}")
+            print(f"   Start time: {booking.start_time}")
+            print(f"   End time: {booking.end_time}")
+            print(f"   Current time: {now}")
+            if booking.end_time:
+                time_diff = booking.end_time - now
+                print(f"   Time remaining: {time_diff.total_seconds()} seconds")
+            
+            # Auto-complete if end_time reached and still in 'booked' status
+            if booking.status == 'booked' and booking.end_time <= now:
+                print(f"   ✅ Auto-completing booking (booked → completed)")
+                booking.status = 'completed'
+                booking.slot.is_available = True
+                
+                # Auto-clear carwash service when booking completes
+                carwash_services = booking.booking_by_user.all()
+                if carwash_services.exists():
+                    print(f"   🧼 Auto-clearing {carwash_services.count()} carwash service(s)")
+                    carwash_services.delete()
+                
+                booking.slot.save()
+                booking.save()
+                response.data['status'] = 'completed'
+            else:
+                print(f"   ⏳ Booking status unchanged: {booking.status}")
+        except Booking.DoesNotExist:
+            pass
+        return response
+
+    def list(self, request, *args, **kwargs):
+        """Override list to handle auto-complete of expired bookings"""
+        from django.utils import timezone
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Auto-complete bookings when their end_time is reached
+        booked_bookings = queryset.filter(status='booked', end_time__lte=timezone.now())
+        for booking in booked_bookings:
+            print(f"✅ Auto-completing booking {booking.booking_id} (booked → completed)")
+            booking.status = 'completed'
+            
+            # Auto-clear carwash service when booking completes
+            carwash_services = booking.booking_by_user.all()
+            if carwash_services.exists():
+                print(f"🧼 Auto-clearing {carwash_services.count()} carwash service(s) for booking {booking.booking_id}")
+                carwash_services.delete()
+            
+            booking.slot.is_available = True
+            booking.slot.save()
+            booking.save()
+        
+        return super().list(request, *args, **kwargs)
+        
     def perform_create(self, serializer):
-        return serializer.save()
+        """Create a new instant booking with proper timing and status"""
+        from rest_framework.exceptions import ValidationError
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        user = self.request.user
+        
+        # Get or create user profile
+        user_profile = UserProfile.objects.get(auth_user=user)
+        
+        # Get slot
+        slot_id = self.request.data.get('slot')
+        try:
+            slot = P_Slot.objects.get(pk=slot_id)
+        except P_Slot.DoesNotExist:
+            raise ValidationError({'slot': 'Slot not found'})
+        
+        # Check if slot is available
+        if not slot.is_available:
+            raise ValidationError({'slot': 'This slot is not available'})
+        
+        # INSTANT BOOKING - Set times to now and now+1hour
+        now = timezone.now()
+        start_time = now
+        end_time = now + timedelta(hours=1)
+        
+        # Check for overlapping bookings
+        overlapping = Booking.objects.filter(
+            slot=slot,
+            start_time__lt=end_time,
+            end_time__gt=start_time,
+            status='booked'
+        ).exists()
+        
+        if overlapping:
+            raise ValidationError({'slot': 'This slot is currently booked'})
+        
+        # Create the instant booking
+        from django.db import transaction
+        with transaction.atomic():
+            booking = Booking.objects.create(
+                user=user_profile,
+                slot=slot,
+                lot=slot.lot,
+                vehicle_number=serializer.validated_data.get('vehicle_number'),
+                booking_type=serializer.validated_data.get('booking_type'),
+                start_time=start_time,
+                end_time=end_time,
+                status='booked',
+                price=slot.price
+            )
+            
+            # Mark slot as unavailable
+            slot.is_available = False
+            slot.save()
+        
+        # Set serializer instance for proper response serialization
+        serializer.instance = booking
+        
+        print(f"✅ BOOKING created: {booking.booking_id}, status=ACTIVE, expires at {end_time}")
 
     def perform_update(self, serializer):
         user = self.request.user
-        # Only admin can update booking status
-        if user.role != "admin":
+        # Allow owners and admin to update booking status
+        if user.role not in ["Owner", "Admin"]:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only admin can update booking status")
+            raise PermissionDenied("Only owners and admins can update booking status")
+        
+        booking = serializer.instance
+        new_status = serializer.validated_data.get('status', booking.status)
+        
+        # If booking is being cancelled, release the slot back to available
+        if new_status.lower() == 'cancelled' and booking.status.lower() != 'cancelled':
+            print(f"🗑️ Cancelling booking {booking.booking_id}, releasing slot {booking.slot.slot_id}")
+            
+            # Mark the slot as available
+            slot = booking.slot
+            slot.is_available = True
+            slot.save()
+            print(f"✅ Slot {slot.slot_id} is now available")
+        
         return serializer.save()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def cancel(self, request, pk=None):
+        """Cancel a booking (for BOOKED/ACTIVE/SCHEDULED statuses and by owner/admin)"""
+        try:
+            booking = self.get_object()
+            user = request.user
+            
+            # Check authorization - owner can cancel their own lot's bookings, admin can cancel any
+            if user.role == "Owner":
+                owner = OwnerProfile.objects.get(auth_user=user)
+                if booking.lot.owner != owner:
+                    return Response(
+                        {'error': 'You can only cancel bookings for your own lots'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            elif user.role != "Admin":
+                return Response(
+                    {'error': 'Only owners and admins can cancel bookings'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if booking can be cancelled - allow cancellation for active/scheduled/booked statuses
+            cancellable_statuses = ['booked', 'BOOKED', 'active', 'ACTIVE', 'scheduled', 'SCHEDULED']
+            if booking.status not in cancellable_statuses:
+                return Response(
+                    {'error': f'Cannot cancel booking with status: {booking.status}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Cancel the booking - use uppercase CANCELLED to match new status system
+            print(f"🗑️ Cancelling booking {booking.booking_id}, releasing slot {booking.slot.slot_id}")
+            booking.status = 'CANCELLED'
+            booking.save()
+            
+            # Release the slot
+            slot = booking.slot
+            slot.is_available = True
+            slot.save()
+            print(f"✅ Slot {slot.slot_id} is now available")
+            
+            serializer = self.get_serializer(booking)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Booking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def renew(self, request, pk=None):
+        """Renew a completed/expired booking by creating a new booking with same slot and user"""
+        try:
+            from django.utils import timezone
+            
+            booking = self.get_object()
+            user = request.user
+            now = timezone.now()
+            
+            print(f"\n{'='*60}")
+            print(f"🔄 RENEW ENDPOINT CALLED")
+            print(f"{'='*60}")
+            print(f"Booking ID: {booking.booking_id} (pk={pk})")
+            print(f"Booking Status: '{booking.status}'")
+            print(f"Start time: {booking.start_time}")
+            print(f"End time: {booking.end_time}")
+            print(f"Current time: {now}")
+            print(f"Time diff (now - end_time): {now - booking.end_time if booking.end_time else 'N/A'}")
+            print(f"Slot Available: {booking.slot.is_available}")
+            print(f"Slot ID: {booking.slot.slot_id}")
+            print(f"User: {user.username} (role: {user.role})")
+            print(f"{'='*60}\n")
+            
+            # ✅ AUTO-FIX MISSING END_TIME (legacy data)
+            if booking.end_time is None and booking.start_time:
+                from datetime import timedelta
+                print(f"⚠️  FIXING: Booking {booking.booking_id} has missing end_time!")
+                booking.end_time = booking.start_time + timedelta(hours=1)
+                booking.save()
+                print(f"✅ Set end_time to {booking.end_time}\n")
+            
+            # Check authorization - only the user who made the booking can renew it
+            if user.role == "User":
+                profile = UserProfile.objects.get(auth_user=user)
+                if booking.user != profile:
+                    return Response(
+                        {'error': 'You can only renew your own bookings'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            elif user.role != "Admin":
+                return Response(
+                    {'error': 'Only users and admins can renew bookings'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # ✅ Check if booking can be renewed (only COMPLETED, CANCELLED, or expired 'booked'/'ACTIVE')
+            # Allow renewal only for completed/cancelled bookings or if time has expired
+            is_time_expired = (booking.end_time and now > booking.end_time)
+            can_renew = booking.status.upper() in ['COMPLETED', 'CANCELLED'] or is_time_expired
+            
+            if not can_renew:
+                error_msg = f'Can only renew completed, cancelled, or expired bookings (current status: {booking.status})'
+                print(f"❌ STATUS CHECK FAILED: {error_msg}")
+                print(f"   Reason: Status is '{booking.status}' and booking hasn't expired yet (end_time: {booking.end_time}, now: {now})\n")
+                return Response(
+                    {'error': error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            print(f"✅ Status check PASSED (can renew this booking)")
+            
+            # Check if the slot is available
+            if not booking.slot.is_available:
+                error_msg = f'Slot {booking.slot.slot_id} is not available for renewal (is_available={booking.slot.is_available})'
+                print(f"❌ SLOT AVAILABILITY CHECK FAILED: {error_msg}\n")
+                return Response(
+                    {'error': 'Slot is not available for renewal'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            print(f"✅ Slot availability check PASSED (slot is available)")
+            
+            # Create new booking with same details
+            from datetime import timedelta
+            
+            print(f"🔄 Renewing booking {booking.booking_id} for user {booking.user.firstname}")
+            
+            # New instant booking starts now and expires in 1 hour
+            new_start_time = timezone.now()
+            new_end_time = new_start_time + timedelta(hours=1)
+            
+            new_booking = Booking.objects.create(
+                user=booking.user,
+                slot=booking.slot,
+                lot=booking.lot,
+                vehicle_number=booking.vehicle_number,
+                booking_type=booking.booking_type,
+                price=booking.price,
+                status='ACTIVE',  # Renewed booking is always instant and ACTIVE
+                start_time=new_start_time,
+                end_time=new_end_time
+            )
+            
+            print(f"   New booking created:")
+            print(f"   - Booking ID: {new_booking.booking_id}")
+            print(f"   - Start time: {new_booking.start_time}")
+            print(f"   - End time: {new_booking.end_time}")
+            print(f"   - Current server time: {timezone.now()}")
+            print(f"   - Time diff: {new_booking.end_time - timezone.now()}")
+            
+            # Mark slot as unavailable
+            slot = booking.slot
+            slot.is_available = False
+            slot.save()
+            
+            print(f"✅ New booking {new_booking.booking_id} created, slot {slot.slot_id} marked as unavailable")
+            
+            serializer = self.get_serializer(new_booking)
+            return Response({
+                'message': 'Booking renewed successfully',
+                'old_booking_id': booking.booking_id,
+                'new_booking': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Booking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"❌ Error renewing booking: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class PaymentViewSet(ModelViewSet):
     serializer_class=PaymentSerializer
@@ -347,6 +795,83 @@ class CarwashViewSet(ModelViewSet):
             profile=UserProfile.objects.get(auth_user=user)
             return Carwash.objects.filter(booking__user=profile)
         return Carwash.objects.all()
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def owner_services(self, request):
+        """Get all carwash services for owner's lots with full booking details"""
+        try:
+            user = request.user
+            
+            print(f"\n{'='*60}")
+            print(f"📋 OWNER SERVICES ENDPOINT")
+            print(f"{'='*60}")
+            print(f"User: {user.username}")
+            print(f"User role (direct): {getattr(user, 'role', 'NOT_SET')}")
+            print(f"User is_superuser: {user.is_superuser}")
+            print(f"{'='*60}\n")
+            
+            # Verify user is owner - use getattr as fallback
+            user_role = getattr(user, 'role', None)
+            if user_role != "Owner":
+                print(f"❌ Access denied - user role is '{user_role}', not 'Owner'")
+                return Response(
+                    {'error': f'Only owners can access this endpoint. Your role: {user_role}'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            try:
+                owner = OwnerProfile.objects.get(auth_user=user)
+            except OwnerProfile.DoesNotExist:
+                print(f"❌ OwnerProfile not found for user {user.username}")
+                return Response(
+                    {'error': 'Owner profile not found. Please complete owner registration.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            print(f"✅ Fetching carwash services for owner {owner.id} ({owner.firstname} {owner.lastname})")
+            
+            # Get all carwashes for owner's lots
+            carwashes = Carwash.objects.filter(
+                booking__lot__owner=owner
+            ).select_related(
+                'booking__user',
+                'booking__lot',
+                'booking__slot',
+                'carwash_type',
+                'employee'
+            ).order_by('-booking__booking_time')
+            
+            # Auto-complete carwashes with expired bookings
+            from django.utils import timezone
+            expired_carwashes = carwashes.filter(
+                booking__status='booked',
+                booking__end_time__lt=timezone.now()
+            )
+            for carwash in expired_carwashes:
+                print(f"⏰ Auto-completing carwash {carwash.carwash_id} with expired booking {carwash.booking.booking_id}")
+                carwash.booking.status = 'completed'
+                carwash.booking.save()
+            
+            print(f"✅ Found {carwashes.count()} carwash services")
+            
+            serializer = CarwashSerializer(carwashes, many=True)
+            return Response({
+                'owner_id': owner.id,
+                'owner_name': f"{owner.firstname} {owner.lastname}",
+                'carwashes': serializer.data,
+                'total_services': carwashes.count()
+            })
+        except OwnerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Owner profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"❌ Error fetching owner services: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CarwashTypeViewSet(ModelViewSet):
     serializer_class=CarwashTypeSerializer

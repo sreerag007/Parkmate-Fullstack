@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
+import MultiBookingTimer from './MultiBookingTimer'
 import './Userland.css'
 
 const Userland = () => {
@@ -37,7 +38,18 @@ const Userland = () => {
     }
   }, [user])
 
-  const activeBookings = bookings.filter(b => b.status === 'Booked')
+  const activeBookings = bookings.filter(b => {
+    const status = b.status ? b.status.toLowerCase() : ''
+    // Include booked (legacy), ACTIVE and SCHEDULED bookings (not COMPLETED)
+    return status === 'booked' || status === 'active' || status === 'scheduled'
+  })
+
+  // Debug logging
+  useEffect(() => {
+    console.log('📊 Bookings data:', bookings)
+    console.log('📊 Active bookings:', activeBookings)
+    console.log('📊 Number of active bookings:', activeBookings.length)
+  }, [bookings, activeBookings])
 
   return (
     <div className='Land'>
@@ -52,14 +64,18 @@ const Userland = () => {
               padding: '12px 20px', 
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
               borderRadius: '10px',
-              marginBottom: '10px'
+              marginBottom: '10px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '10px'
             }}>
               <h3 style={{ 
                 margin: 0, 
                 color: '#fff', 
                 fontSize: '1.4rem',
                 fontWeight: '600',
-                textAlign: 'center'
+                flex: 1
               }}>
                 Welcome back, {user.username}! 👋
               </h3>
@@ -74,13 +90,9 @@ const Userland = () => {
 
           <button onClick={() => navigate('/lots')}>Book Now</button>
 
+          {/* Multi-Booking Timer Component */}
           {!loading && activeBookings.length > 0 && (
-            <div style={{ marginTop: '20px', padding: '15px', background: '#f0f9ff', borderRadius: '8px', width: '100%' }}>
-              <h5 style={{ margin: '0 0 10px 0', color: '#0369a1' }}>Active Bookings</h5>
-              <p style={{ margin: 0, fontSize: '14px', color: '#0c4a6e' }}>
-                You have {activeBookings.length} active booking{activeBookings.length > 1 ? 's' : ''}
-              </p>
-            </div>
+            <MultiBookingTimer bookings={activeBookings} />
           )}
 
           {!loading && lots.length > 0 && (

@@ -40,6 +40,103 @@ export const AuthProvider = ({ children }) => {
         };
 
         initAuth();
+
+        // Listen for storage changes (other tabs logging in/out)
+        const handleStorageChange = (e) => {
+            console.log('📡 Storage changed in another tab:', e.key);
+            
+            if (e.key === 'authToken') {
+                // Auth token changed in another tab
+                if (!e.newValue) {
+                    // Token was removed (logout in another tab)
+                    console.log('🔐 Logout detected from another tab');
+                    setUser(null);
+                    setOwner(null);
+                    setAdmin(null);
+                } else {
+                    // Token was added or changed (login in another tab)
+                    console.log('🔐 Login detected from another tab');
+                    initAuth();
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
+
+    // Handle tab visibility and session keep-alive
+    useEffect(() => {
+        if (!authService.isAuthenticated()) return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                // Tab became visible - validate session immediately
+                console.log('👁️ Tab is now visible - validating session...');
+                
+                const currentUser = authService.getCurrentUser();
+                if (currentUser.token) {
+                    // Try a simple API call to validate token
+                    axios.get(`${apiUrl}/auth/verify/`, {
+                        headers: { Authorization: `Token ${currentUser.token}` }
+                    })
+                    .then(() => {
+                        console.log('✅ Session still valid after tab focus');
+                    })
+                    .catch((error) => {
+                        if (error.response?.status === 401) {
+                            console.log('🔐 Session expired while tab was hidden - logging out');
+                            setUser(null);
+                            setOwner(null);
+                            setAdmin(null);
+                            authService.logout();
+                        }
+                    });
+                }
+            } else {
+                console.log('😴 Tab is now hidden');
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    // Keep session alive by sending heartbeat every 3 minutes
+    useEffect(() => {
+        if (!authService.isAuthenticated()) return;
+
+        const sendHeartbeat = async () => {
+            try {
+                const currentUser = authService.getCurrentUser();
+                if (!currentUser.token) return;
+
+                // Send a lightweight request to keep session alive
+                await axios.get(`${apiUrl}/auth/verify/`, {
+                    headers: { Authorization: `Token ${currentUser.token}` }
+                });
+                console.log('💓 Heartbeat sent - session refreshed');
+            } catch (error) {
+                if (error.response?.status === 401) {
+                    console.log('🔐 Heartbeat failed - session expired');
+                    setUser(null);
+                    setOwner(null);
+                    setAdmin(null);
+                    authService.logout();
+                }
+            }
+        };
+
+        // Send heartbeat every 3 minutes to keep session alive
+        const heartbeatInterval = setInterval(sendHeartbeat, 3 * 60 * 1000);
+
+        return () => clearInterval(heartbeatInterval);
     }, []);
 
     // User Login
@@ -242,6 +339,48 @@ export const AuthProvider = ({ children }) => {
         loading,
         isAuthenticated: authService.isAuthenticated()
     };
+
+    // Add a periodic check to validate session is still active
+    useEffect(() => {
+        if (!authService.isAuthenticated()) return;
+
+        const validateSession = async () => {
+            try {
+                const currentUser = authService.getCurrentUser();
+                if (!currentUser.token) {
+                    console.log('🔐 No token found, clearing auth state');
+                    setUser(null);
+                    setOwner(null);
+                    setAdmin(null);
+                    return;
+                }
+                
+                // Verify token is still valid by making a simple API call
+                // This ensures the backend still recognizes the token
+                try {
+                    await axios.get(`${apiUrl}/auth/verify/`, {
+                        headers: { Authorization: `Token ${currentUser.token}` }
+                    });
+                    console.log('✅ Session still valid');
+                } catch (error) {
+                    if (error.response?.status === 401) {
+                        console.log('🔐 Session expired - clearing auth');
+                        setUser(null);
+                        setOwner(null);
+                        setAdmin(null);
+                        authService.logout();
+                    }
+                }
+            } catch (error) {
+                console.error('Session validation error:', error);
+            }
+        };
+
+        // Validate session every 5 minutes
+        const sessionCheckInterval = setInterval(validateSession, 5 * 60 * 1000);
+
+        return () => clearInterval(sessionCheckInterval);
+    }, []);
 
     return (
         <AuthContext.Provider value={value}>

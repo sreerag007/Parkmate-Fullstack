@@ -11,9 +11,13 @@ const AdminOwners = () => {
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedOwner, setSelectedOwner] = useState(null)
     const [showDocumentModal, setShowDocumentModal] = useState(false)
+    const [showLotsModal, setShowLotsModal] = useState(false)
     const [showDeclineConfirm, setShowDeclineConfirm] = useState(false)
     const [pendingOwnerId, setPendingOwnerId] = useState(null)
     const [actionLoading, setActionLoading] = useState(false)
+    const [ownerLots, setOwnerLots] = useState([])
+    const [lotsLoading, setLotsLoading] = useState(false)
+    const [lotsError, setLotsError] = useState(null)
 
     useEffect(() => {
         fetchOwners()
@@ -105,6 +109,34 @@ const AdminOwners = () => {
         setSelectedOwner(null)
     }
 
+    const handleViewLots = async (owner) => {
+        try {
+            setLotsLoading(true)
+            setLotsError(null)
+            setOwnerLots([])
+            
+            console.log(`📍 Fetching lots for owner ${owner.id}...`)
+            const data = await parkingService.getOwnerLots(owner.id)
+            console.log(`✅ Lots fetched:`, data)
+            
+            setSelectedOwner(owner)
+            setOwnerLots(data.lots || [])
+            setShowLotsModal(true)
+        } catch (err) {
+            console.error('❌ Error fetching owner lots:', err)
+            setLotsError('Failed to load parking lots for this owner')
+        } finally {
+            setLotsLoading(false)
+        }
+    }
+
+    const handleCloseLotsModal = () => {
+        setShowLotsModal(false)
+        setSelectedOwner(null)
+        setOwnerLots([])
+        setLotsError(null)
+    }
+
     const filteredOwners = owners.filter(owner => {
         const searchLower = searchTerm.toLowerCase()
         const fullName = `${owner.firstname || ''} ${owner.lastname || ''}`.toLowerCase()
@@ -157,6 +189,81 @@ const AdminOwners = () => {
                 <div className="alert alert-error">
                     <span className="alert-icon">Error</span>
                     <span>{error}</span>
+                </div>
+            )}
+
+            {showLotsModal && selectedOwner && (
+                <div className="modal-overlay" onClick={handleCloseLotsModal}>
+                    <div className="modal-card lots-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>🅿️ Parking Lots - {selectedOwner.firstname} {selectedOwner.lastname}</h2>
+                            <button className="close-btn" onClick={handleCloseLotsModal}>&times;</button>
+                        </div>
+                        <div className="modal-body">
+                            {lotsLoading ? (
+                                <div style={{ textAlign: 'center', padding: '40px' }}>
+                                    <div className="spinner"></div>
+                                    <p>Loading parking lots...</p>
+                                </div>
+                            ) : lotsError ? (
+                                <div style={{ 
+                                    color: '#dc2626', 
+                                    padding: '20px', 
+                                    backgroundColor: '#fef2f2',
+                                    borderRadius: '8px',
+                                    textAlign: 'center'
+                                }}>
+                                    <p>{lotsError}</p>
+                                </div>
+                            ) : ownerLots.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                                    <p>This owner has no parking lots</p>
+                                </div>
+                            ) : (
+                                <div className="lots-table-container">
+                                    <table className="lots-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Lot Name</th>
+                                                <th>Address</th>
+                                                <th>Total Slots</th>
+                                                <th>Available Slots</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {ownerLots.map(lot => (
+                                                <tr key={lot.lot_id}>
+                                                    <td style={{ fontWeight: '600' }}>{lot.lot_name}</td>
+                                                    <td>{lot.streetname}, {lot.city}</td>
+                                                    <td style={{ textAlign: 'center' }}>{lot.total_slots}</td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span style={{
+                                                            padding: '4px 12px',
+                                                            borderRadius: '20px',
+                                                            backgroundColor: '#ecfdf5',
+                                                            color: '#065f46',
+                                                            fontWeight: '600',
+                                                            fontSize: '0.9rem'
+                                                        }}>
+                                                            {lot.available_slots || 0}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button 
+                                className="btn-secondary"
+                                onClick={handleCloseLotsModal}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -237,6 +344,7 @@ const AdminOwners = () => {
                                 <th>Phone</th>
                                 <th>Approval Status</th>
                                 <th>Actions</th>
+                                <th>Parking Lots</th>
                                 <th>Approval/Decline</th>
                             </tr>
                         </thead>
@@ -262,6 +370,17 @@ const AdminOwners = () => {
                                                     title="View verification document"
                                                 >
                                                     View Doc
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button
+                                                    className="btn-edit"
+                                                    onClick={() => handleViewLots(owner)}
+                                                    title="View parking lots owned by this owner"
+                                                >
+                                                    View Lots
                                                 </button>
                                             </div>
                                         </td>
@@ -293,7 +412,7 @@ const AdminOwners = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '24px' }}>
+                                    <td colSpan="7" style={{ textAlign: 'center', color: '#94a3b8', padding: '24px' }}>
                                         No owners found
                                     </td>
                                 </tr>

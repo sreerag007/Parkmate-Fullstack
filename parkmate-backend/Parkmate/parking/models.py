@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import AbstractUser
+from datetime import datetime, timedelta
 
 phone_regex = RegexValidator(
     regex=r'^(?:\+91)?[6-9]\d{9}$', 
@@ -183,6 +184,8 @@ class Booking(models.Model):
     vehicle_number=models.CharField(max_length=100,validators=[vehicle_regex])
     booking_type=models.CharField(max_length=100,choices=BOOKING_CHOICES)
     booking_time=models.DateField(auto_now_add=True)
+    start_time=models.DateTimeField(null=True,blank=True,help_text="Booking start time (auto-set when created)")
+    end_time=models.DateTimeField(null=True,blank=True,help_text="Booking end time (default 1 hour from start)")
     price=models.DecimalField(max_digits=5,decimal_places=2,default=0.00)
 
     STATUS_CHOICES=[
@@ -191,6 +194,23 @@ class Booking(models.Model):
         ('cancelled','Cancelled')
     ]
     status=models.CharField(max_length=10,choices=STATUS_CHOICES,default="booked")
+
+    def save(self, *args, **kwargs):
+        # Set start_time if not already set
+        if not self.start_time:
+            from django.utils import timezone
+            self.start_time = timezone.now()
+        # Set end_time to 1 hour after start_time if not already set
+        if not self.end_time and self.start_time:
+            self.end_time = self.start_time + timedelta(hours=1)
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        """Check if booking time has expired"""
+        if self.end_time:
+            from django.utils import timezone
+            return timezone.now() > self.end_time and self.status.lower() == 'booked'
+        return False
 
     def __str__(self):
         return f"Booking {self.booking_id} for {self.user.firstname}"    

@@ -20,64 +20,79 @@ export default function Service() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-        // Fetch user's active bookings, carwash types, and employees
-        const [bookingsData, carwashTypesData, employeesData] = await Promise.all([
-          parkingService.getBookings(),
-          parkingService.getCarwashTypes(),
-          parkingService.getEmployees()
-        ])
+      // Fetch user's active bookings, carwash types, and employees
+      const [bookingsData, carwashTypesData, employeesData] = await Promise.all([
+        parkingService.getBookings(),
+        parkingService.getCarwashTypes(),
+        parkingService.getEmployees()
+      ])
 
-        console.log('🚗 Bookings:', bookingsData)
-        console.log('🧼 Carwash types:', carwashTypesData)
-        console.log('👷 Employees:', employeesData)
+      console.log('🚗 Bookings:', bookingsData)
+      console.log('🧼 Carwash types:', carwashTypesData)
+      console.log('👷 Employees:', employeesData)
 
-        // Filter only active bookings (check various status values)
-        const activeBookings = bookingsData.filter(b => {
-          console.log(`Booking ${b.booking_id} status:`, b.status)
-          return b.status === 'Booked' || b.status === 'booked' || b.status === 'BOOKED'
-        })
-        console.log('✅ Active bookings after filter:', activeBookings)
-        
-        setBookings(activeBookings)
-        setCarwashTypes(carwashTypesData)
-        setEmployees(employeesData)
+      // Filter only active bookings (support both old 'booked' and new 'ACTIVE' statuses)
+      const activeBookings = bookingsData.filter(b => {
+        console.log(`Booking ${b.booking_id} status:`, b.status)
+        const status = b.status ? b.status.toLowerCase() : ''
+        return status === 'booked' || status === 'active' || status === 'scheduled'
+      })
+      console.log('✅ Active bookings after filter:', activeBookings)
+      
+      setBookings(activeBookings)
+      setCarwashTypes(carwashTypesData)
+      setEmployees(employeesData)
 
-        // Auto-select if only one booking or suggested booking
-        if (activeBookings.length === 1) {
-          setSelectedBooking(activeBookings[0].booking_id)
-        } else if (suggestedBookingId) {
-          const found = activeBookings.find(b => b.booking_id === parseInt(suggestedBookingId))
-          if (found) setSelectedBooking(found.booking_id)
-        }
-
-        // Auto-select first carwash type and employee
-        if (carwashTypesData.length > 0) {
-          setSelectedService(carwashTypesData[0].carwash_type_id)
-        }
-        if (employeesData.length > 0) {
-          setSelectedEmployee(employeesData[0].employee_id)
-        }
-
-      } catch (err) {
-        console.error('❌ Error loading service data:', err)
-        setError('Failed to load car wash services. Please try again.')
-      } finally {
-        setLoading(false)
+      // Auto-select if only one booking or suggested booking
+      if (activeBookings.length === 1) {
+        setSelectedBooking(activeBookings[0].booking_id)
+      } else if (suggestedBookingId) {
+        const found = activeBookings.find(b => b.booking_id === parseInt(suggestedBookingId))
+        if (found) setSelectedBooking(found.booking_id)
       }
-    }
 
+      // Auto-select first carwash type and employee
+      if (carwashTypesData.length > 0) {
+        setSelectedService(carwashTypesData[0].carwash_type_id)
+      }
+      if (employeesData.length > 0) {
+        setSelectedEmployee(employeesData[0].employee_id)
+      }
+
+    } catch (err) {
+      console.error('❌ Error loading service data:', err)
+      setError('Failed to load car wash services. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     if (user) {
       loadData()
     } else {
       setLoading(false)
     }
   }, [user, suggestedBookingId])
+
+  const refreshBookings = async () => {
+    try {
+      const bookingsData = await parkingService.getBookings()
+      const activeBookings = bookingsData.filter(b => {
+        const status = b.status ? b.status.toLowerCase() : ''
+        return status === 'booked' || status === 'active' || status === 'scheduled'
+      })
+      setBookings(activeBookings)
+      console.log('✅ Bookings refreshed after service booking')
+    } catch (err) {
+      console.error('❌ Error refreshing bookings:', err)
+    }
+  }
 
   const bookService = async () => {
     if (!selectedBooking) return alert('Please select a booking first')
@@ -102,7 +117,10 @@ export default function Service() {
       await parkingService.createCarwash(carwashData)
       
       alert(`Car wash service '${carwashType.name}' booked successfully!`)
-      navigate('/profile')
+      // Refresh bookings to update carwash status
+      await refreshBookings()
+      // Navigate back to the booking timer view
+      navigate(`/booking-confirmation?booking=${selectedBooking}`)
     } catch (err) {
       console.error('❌ Error booking service:', err)
       console.error('❌ Error response:', err.response?.data)
@@ -146,10 +164,29 @@ export default function Service() {
     )
   }
 
+  // Check if the SELECTED booking already has an active carwash service
+  // Use the 'carwash' field from booking serializer instead of 'booking_by_user' relationship
+  const selectedBookingHasCarwash = selectedBooking && bookings
+    .find(b => b.booking_id === selectedBooking)
+    ?.carwash !== null && bookings.find(b => b.booking_id === selectedBooking)?.carwash !== undefined
+
   return (
     <div className="service-root container">
       <h2>Car Wash Services</h2>
       <p className="muted">Select your booking and choose a car wash service.</p>
+
+      {selectedBookingHasCarwash && (
+        <div className="alert alert-warning" style={{
+          padding: '12px 16px',
+          marginBottom: '20px',
+          background: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '6px',
+          color: '#92400e'
+        }}>
+          <strong>⚠️ Note:</strong> This booking already has a car wash service. Complete or renew that booking before adding another service.
+        </div>
+      )}
 
       <div className="service-grid">
         <div className="bookings-list">
@@ -196,8 +233,20 @@ export default function Service() {
           )}
 
           <div className="svc-actions">
-            <button className="btn primary" onClick={bookService} disabled={!selectedBooking || !selectedService}>
-              Book Car Wash Service
+            <button 
+              className="btn primary" 
+              onClick={bookService} 
+              disabled={!selectedBooking || !selectedService || selectedBookingHasCarwash}
+              title={selectedBookingHasCarwash ? "This booking already has a car wash service" : ""}
+            >
+              {selectedBookingHasCarwash ? "🚫 Service Already Active" : "Book Car Wash Service"}
+            </button>
+            <button 
+              className="btn secondary" 
+              onClick={() => navigate(`/booking-confirmation?booking=${selectedBooking}`)}
+              disabled={!selectedBooking}
+            >
+              ⏱️ Back to Timer
             </button>
             <button className="btn ghost" onClick={() => navigate('/profile')}>Back to Profile</button>
           </div>

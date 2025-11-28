@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import parkingService from '../../services/parkingService';
 import './Lot1.scss';
@@ -15,8 +15,20 @@ function formatRemaining(ms) {
     return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
+// Convert Date object to datetime-local format (YYYY-MM-DDTHH:mm)
+// This ensures the min/max values match the user's local timezone
+function formatDateTimeLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 const DynamicLot = () => {
     const { lotId } = useParams();
+    const navigate = useNavigate();
     const { user } = useAuth();
 
     const [lotInfo, setLotInfo] = useState(null);
@@ -25,11 +37,59 @@ const DynamicLot = () => {
     const [payment, setPayment] = useState('CC');
     const [vehicleType, setVehicleType] = useState('Hatchback');
     const [bookingType, setBookingType] = useState('Instant');
+    const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [now, setNow] = useState(Date.now());
-    const [userBooking, setUserBooking] = useState(null);
+    const [showBookingConfirm, setShowBookingConfirm] = useState(false);
+    const [isBooking, setIsBooking] = useState(false);
     const timeoutsRef = useRef({});
+    const refreshIntervalRef = useRef(null);
+
+    // Function to refresh slots from backend
+    const refreshSlots = async () => {
+        try {
+            console.log('🔄 Refreshing slots from backend...');
+            
+            // Fetch slots for this lot
+            const allSlots = await parkingService.getSlots();
+            console.log('🔍 All slots from API:', allSlots);
+            console.log('🔍 Looking for slots with lot_detail.lot_id =', parseInt(lotId));
+            
+            const lotSlots = allSlots.filter(slot => {
+                return slot.lot_detail?.lot_id === parseInt(lotId);
+            });
+            console.log('🔍 Refreshed slots for this lot:', lotSlots);
+            
+            // Check for any booked slots
+            const bookedSlots = lotSlots.filter(s => s.booking);
+            console.log(`📊 Total slots: ${lotSlots.length}, Booked slots: ${bookedSlots.length}`);
+            if (bookedSlots.length > 0) {
+                console.log('📊 Booked slot details:');
+                bookedSlots.forEach(s => {
+                    console.log(`  - Slot #${s.slot_id}: booking_id=${s.booking.booking_id}, status=${s.booking.status}, end_time=${s.booking.end_time}, is_available=${s.is_available}`);
+                });
+            }
+            
+            // Map backend slots to frontend format
+            const mappedSlots = lotSlots.map(slot => ({
+                id: slot.slot_id,
+                backendId: slot.slot_id,
+                slotNumber: slot.slot_id,
+                isAvailable: slot.is_available,
+                vehicleType: slot.vehicle_type,
+                price: slot.price,
+                // ✅ Use booking.end_time from backend instead of bookedAt
+                booking: slot.booking, // Store full booking object with end_time
+                bookedAt: slot.booking ? new Date(slot.booking.end_time).getTime() - (3600 * 1000) : null // Calculate initial bookedAt
+            }));
+            console.log('🔍 Mapped refreshed slots:', mappedSlots);
+
+            setSlots(mappedSlots);
+        } catch (err) {
+            console.error('❌ Error refreshing slots:', err);
+        }
+    };
 
     // Load lot info and slots from backend
     useEffect(() => {
@@ -45,30 +105,8 @@ const DynamicLot = () => {
                 console.log('🔍 Lot details:', lot);
                 setLotInfo(lot);
 
-                // Fetch slots for this lot
-                const allSlots = await parkingService.getSlots();
-                console.log('🔍 All slots from API:', allSlots);
-                console.log('🔍 Looking for slots with lot_detail.lot_id =', parseInt(lotId));
-                
-                const lotSlots = allSlots.filter(slot => {
-                    console.log('🔍 Checking slot:', slot.slot_id, 'lot_detail:', slot.lot_detail);
-                    return slot.lot_detail?.lot_id === parseInt(lotId);
-                });
-                console.log('🔍 Filtered slots for this lot:', lotSlots);
-                
-                // Map backend slots to frontend format
-                const mappedSlots = lotSlots.map(slot => ({
-                    id: slot.slot_id,
-                    backendId: slot.slot_id,
-                    slotNumber: slot.slot_id, // Use slot_id as display number
-                    isAvailable: slot.is_available,
-                    vehicleType: slot.vehicle_type,
-                    price: slot.price,
-                    bookedAt: !slot.is_available ? Date.now() : null
-                }));
-                console.log('🔍 Mapped slots:', mappedSlots);
-
-                setSlots(mappedSlots);
+                // Load slots
+                await refreshSlots();
             } catch (err) {
                 console.error('❌ Error loading lot data:', err);
                 console.error('❌ Error response:', err.response?.data);
@@ -79,6 +117,17 @@ const DynamicLot = () => {
         };
 
         loadLotData();
+
+        // Set up periodic refresh every 5 seconds (increased from 10) to catch expired bookings faster
+        refreshIntervalRef.current = setInterval(() => {
+            refreshSlots();
+        }, 5000);
+
+        return () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+            }
+        };
     }, [lotId]);
 
     // Clock tick
@@ -111,6 +160,10 @@ const DynamicLot = () => {
         return () => {
             Object.values(timeoutsRef.current).forEach((id) => clearTimeout(id));
             timeoutsRef.current = {};
+            // Clean up refresh interval on unmount
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [slots]);
@@ -120,6 +173,14 @@ const DynamicLot = () => {
         if (!s || !s.isAvailable) return;
         setSelected(id);
     };
+
+    // Handle slot deletion - if selected slot is deleted, deselect it
+    useEffect(() => {
+        if (selected && !slots.find(s => s.id === selected)) {
+            console.log('🗑️ Selected slot was deleted, clearing selection');
+            setSelected(null);
+        }
+    }, [slots, selected]);
 
     const notify = (text) => {
         try {
@@ -151,29 +212,93 @@ const DynamicLot = () => {
         
         if (!slot || !slot.isAvailable) return alert('Slot already booked');
         
-        const ok = window.confirm(`Confirm booking for ${vehicleType} in slot #${slot.slotNumber} using ${payment}?`);
-        if (!ok) return;
+        // Show confirmation modal instead of window.confirm
+        setShowBookingConfirm(true);
+    };
+
+    const handleConfirmBooking = async () => {
+        if (!selected) return;
+        
+        const slot = slots.find((s) => s.id === selected);
+        if (!slot) return;
 
         try {
+            setIsBooking(true);
             console.log('🎯 Creating booking...');
+            console.log('🎯 Booking type:', bookingType);
             
             // Get user's vehicle number from profile
             const userProfile = await parkingService.getUserProfile();
             console.log('🎯 User profile:', userProfile);
             
+            // Validate vehicle number exists
+            if (!userProfile.vehicle_number) {
+                alert('Please add a vehicle number to your profile before booking');
+                setShowBookingConfirm(false);
+                setIsBooking(false);
+                return;
+            }
+            
             // Create booking via backend
             const bookingData = {
                 slot: slot.backendId,
                 vehicle_number: userProfile.vehicle_number,
-                booking_type: bookingType
+                booking_type: bookingType || 'Instant'
             };
-            console.log('🎯 Booking data:', bookingData);
+            
+            // For advance bookings, validate and add start_time
+            if (bookingType && bookingType.toLowerCase() === 'advance') {
+                if (!advanceStartTime) {
+                    alert('Please select a start time for advance booking');
+                    setIsBooking(false);
+                    return;
+                }
+                // Parse the selected datetime (datetime-local gives local time, not UTC)
+                // Format: "2025-11-28T22:00" - this is in the user's local timezone (IST)
+                const [datePart, timePart] = advanceStartTime.split('T');
+                const [year, month, day] = datePart.split('-');
+                const [hours, minutes] = timePart.split(':');
+                
+                // Create a local date object
+                const selectedDateTime = new Date(
+                    parseInt(year),
+                    parseInt(month) - 1,  // Month is 0-indexed
+                    parseInt(day),
+                    parseInt(hours),
+                    parseInt(minutes),
+                    0,
+                    0
+                );
+                
+                const now = new Date();
+                const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60000);
+
+                // Validate 15-minute minimum buffer (compare in local time)
+                if (selectedDateTime < fifteenMinutesFromNow) {
+                    alert('Advance bookings must be at least 15 minutes in the future');
+                    setIsBooking(false);
+                    return;
+                }
+
+                // Send the local datetime directly to backend
+                // The backend (now set to IST timezone) will understand this is IST time
+                // Format: "2025-11-28T22:25:00" (local IST time string)
+                const localTimeString = `${datePart}T${timePart}:00`;
+                bookingData.start_time = localTimeString;
+                console.log('🎯 Local time selected (IST):', selectedDateTime.toLocaleString());
+                console.log('🎯 Sending to backend (IST format):', localTimeString);
+            }
+            
+            console.log('🎯 Final booking data:', bookingData);
 
             const booking = await parkingService.createBooking(bookingData);
             console.log('🎯 Booking created:', booking);
             
-            // Store user's booking for car wash button
-            setUserBooking(booking.booking_id);
+            // Close modal
+            setShowBookingConfirm(false);
+            
+            // Redirect to booking confirmation page
+            navigate(`/booking-confirmation?booking=${booking.booking_id}`);
             
             // Update local slot status
             setSlots((prev) =>
@@ -181,23 +306,27 @@ const DynamicLot = () => {
             );
 
             setSelected(null);
-            notify(`Slot #${slot.slotNumber} booked successfully for 1 hour!`);
-            
-            // Optionally create payment record
-            if (payment !== 'Cash') {
-                console.log('🎯 Creating payment...');
-                await parkingService.createPayment({
-                    booking: booking.booking_id,
-                    payment_method: payment,
-                    amount: booking.price
-                });
-                console.log('🎯 Payment created');
-            }
+            setAdvanceStartTime(''); // Reset the time picker
         } catch (err) {
-            console.error('❌ Error creating booking:', err);
-            console.error('❌ Error response:', err.response?.data);
-            alert('Failed to create booking. Please try again.');
+            setShowBookingConfirm(false);
+            console.error('❌ Error booking slot:', err);
+            
+            // Log detailed error information
+            if (err.response) {
+                console.error('Error status:', err.response.status);
+                console.error('Error data:', err.response.data);
+                const errorMsg = err.response.data?.detail || err.response.data?.slot?.[0] || err.response.data?.vehicle_number?.[0] || err.response.data?.booking_type?.[0] || err.response.data?.start_time?.[0] || 'Unknown error';
+                alert(`Failed to book slot: ${errorMsg}`);
+            } else {
+                alert('Failed to book slot. Please try again.');
+            }
+        } finally {
+            setIsBooking(false);
         }
+    };
+
+    const handleCancelBooking = () => {
+        setShowBookingConfirm(false);
     };
 
     const releaseSlot = async (id) => {
@@ -234,8 +363,28 @@ const DynamicLot = () => {
 
     return (
         <div className="lot1-demo lot1-root">
-            <h1>{lotInfo.lot_name} — Book a Slot</h1>
-            <p style={{ color: '#666', marginTop: '-10px' }}>📍 {lotInfo.streetname}, {lotInfo.city}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div>
+                    <h1>{lotInfo.lot_name} — Book a Slot</h1>
+                    <p style={{ color: '#666', marginTop: '-10px' }}>📍 {lotInfo.streetname}, {lotInfo.city}</p>
+                </div>
+                <button 
+                    onClick={refreshSlots}
+                    style={{
+                        padding: '10px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#3b82f6',
+                        color: '#fff',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem'
+                    }}
+                    title="Refresh slots to see latest updates"
+                >
+                    🔄 Refresh
+                </button>
+            </div>
 
             <div className="pricing-card">
                 <div className="price-header">Parking Rate</div>
@@ -250,18 +399,62 @@ const DynamicLot = () => {
                     <p>No slots available for this lot.</p>
                 ) : (
                     slots.map((s) => {
-                        const remaining = s.bookedAt ? ONE_HOUR_MS - (now - s.bookedAt) : null;
-                        const isBooked = !s.isAvailable;
+                        // ✅ Calculate remaining time from backend end_time instead of local bookedAt
+                        let remaining = null;
+                        let isExpired = false;
+                        let isCancelledOrCompleted = false;
+                        let displayStatus = 'available';
+                        let statusLabel = `Available - ₹${s.price}/hr`;
+                        
+                        // 🔥 PRIMARY CHECK: If there's a booking object, the slot is occupied
+                        if (s.booking && s.booking.end_time) {
+                            const endTime = new Date(s.booking.end_time).getTime();
+                            const startTime = new Date(s.booking.start_time).getTime();
+                            const currentTime = Date.now(); // Use Date.now() instead of state 'now' for accuracy
+                            remaining = Math.max(0, endTime - currentTime);
+                            isExpired = remaining <= 0; // ✅ Expired if remaining time is 0 or negative
+                            
+                            // Get booking status from backend
+                            const bookingStatus = s.booking.status ? s.booking.status.toUpperCase() : 'ACTIVE';
+                            
+                            // Check if booking is cancelled or completed
+                            isCancelledOrCompleted = bookingStatus === 'CANCELLED' || bookingStatus === 'COMPLETED';
+                            
+                            // Determine display status based on booking status
+                            if (isCancelledOrCompleted || isExpired) {
+                                // Expired or completed bookings show the slot as available
+                                displayStatus = 'available';
+                                statusLabel = `Available - ₹${s.price}/hr`;
+                            } else if (bookingStatus === 'SCHEDULED') {
+                                // For scheduled bookings, show when it starts
+                                displayStatus = 'scheduled';
+                                const startDate = new Date(startTime);
+                                const hours = String(startDate.getHours()).padStart(2, '0');
+                                const minutes = String(startDate.getMinutes()).padStart(2, '0');
+                                statusLabel = `Starts at ${hours}:${minutes}`;
+                            } else {
+                                // For ACTIVE or other statuses, show remaining time
+                                displayStatus = 'booked';
+                                statusLabel = `Booked — ${formatRemaining(remaining)}`;
+                            }
+                        }
+                        
+                        // ✅ Slot is booked only if:
+                        // - displayStatus is 'booked' or 'scheduled'
+                        const isBooked = (displayStatus === 'booked' || displayStatus === 'scheduled');
+                        const displayAsAvailable = !isBooked;
+                        
                         return (
                             <button
                                 key={s.id}
-                                className={`slot ${isBooked ? 'booked' : 'available'} ${selected === s.id ? 'selected' : ''}`}
+                                className={`slot ${displayStatus} ${selected === s.id && displayAsAvailable ? 'selected' : ''}`}
                                 onClick={() => selectSlot(s.id)}
                                 disabled={isBooked}
+                                title={`Slot #${s.slotNumber} - ${displayStatus.toUpperCase()}`}
                             >
                                 <div className="slot-id">#{s.slotNumber}</div>
                                 <div className="slot-state">
-                                    {isBooked ? `Booked — ${formatRemaining(remaining)}` : `Available - ₹${s.price}/hr`}
+                                    {statusLabel}
                                 </div>
                             </button>
                         );
@@ -300,17 +493,79 @@ const DynamicLot = () => {
                     <label>Booking Type</label>
                     <select value={bookingType} onChange={(e) => setBookingType(e.target.value)}>
                         <option value="Instant">Instant Booking</option>
-                        <option value="Advance">Advance Booking</option>
+                        <option value="Advance" disabled>Advance Booking (Coming Soon)</option>
                     </select>
                 </div>
+
+                {bookingType && bookingType.toLowerCase() === 'advance' && (
+                    <div className="vehicle-choice">
+                        <label>Select Start Time (min. 15 minutes from now)</label>
+                        <input
+                            type="datetime-local"
+                            value={advanceStartTime}
+                            onChange={(e) => setAdvanceStartTime(e.target.value)}
+                            min={formatDateTimeLocal(new Date(Date.now() + 15 * 60000))}
+                            required
+                        />
+                    </div>
+                )}
 
                 <div className="actions">
                     <button className="btn primary" onClick={bookSlot} disabled={!selected}>Book Selected Slot</button>
                     <Link to="/profile" className="btn ghost" style={{ marginLeft: 8 }}>My Profile</Link>
-                    {userBooking && (
-                        <Link to={`/service?booking=${userBooking}`} className="btn primary" style={{ marginLeft: 8 }}>Book Car Wash</Link>
-                    )}
                 </div>
+
+                {/* Booking Confirmation Modal */}
+                {showBookingConfirm && (
+                    <div className="modal-overlay" onClick={handleCancelBooking}>
+                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                            <h3>Confirm Booking</h3>
+                            <div className="booking-details">
+                                <p>
+                                    <strong>Slot:</strong> #{slots.find(s => s.id === selected)?.slotNumber}
+                                </p>
+                                <p>
+                                    <strong>Vehicle Type:</strong> {vehicleType}
+                                </p>
+                                <p>
+                                    <strong>Duration:</strong> 1 Hour
+                                </p>
+                                <p>
+                                    <strong>Price:</strong> ₹{slots.find(s => s.id === selected)?.price}
+                                </p>
+                                <p>
+                                    <strong>Payment Method:</strong> {payment === 'CC' ? 'Credit Card' : payment === 'Cash' ? 'Cash' : 'UPI'}
+                                </p>
+                                {bookingType && bookingType.toLowerCase() === 'advance' && advanceStartTime && (
+                                    <p>
+                                        <strong>Starts At:</strong> {new Date(advanceStartTime).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                            <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '15px', textAlign: 'center' }}>
+                                {bookingType && bookingType.toLowerCase() === 'advance' 
+                                    ? '⏰ Your advance booking will activate at the selected time. Timer will start automatically.' 
+                                    : 'Your booking will be valid for 1 hour from confirmation.'}
+                            </p>
+                            <div className="modal-actions">
+                                <button
+                                    className="btn danger"
+                                    onClick={handleCancelBooking}
+                                    disabled={isBooking}
+                                >
+                                    ✕ Cancel
+                                </button>
+                                <button
+                                    className="btn primary"
+                                    onClick={handleConfirmBooking}
+                                    disabled={isBooking}
+                                >
+                                    {isBooking ? '⏳ Booking...' : '✓ Confirm Booking'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

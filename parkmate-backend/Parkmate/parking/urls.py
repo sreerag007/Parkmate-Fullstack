@@ -23,6 +23,7 @@ auth_register_user=AuthViewSet.as_view({'post':'register_user'})
 auth_register_owner=AuthViewSet.as_view({'post':'register_owner'})
 auth_login=AuthViewSet.as_view({'post':'login'})
 auth_logout=AuthViewSet.as_view({'post':'logout'})
+auth_verify=AuthViewSet.as_view({'get':'verify'})
 
 urlpatterns = [
     path("",include(router.urls)),
@@ -30,5 +31,6 @@ urlpatterns = [
     path('auth/register-user/', auth_register_user, name='auth-register-user'),
     path('auth/register-owner/', auth_register_owner, name='auth-register-owner'),
     path('auth/login/',auth_login, name='auth-login'),
-    path('auth/logout/', auth_logout, name='auth-logout')
+    path('auth/logout/', auth_logout, name='auth-logout'),
+    path('auth/verify/', auth_verify, name='auth-verify')
 ]
