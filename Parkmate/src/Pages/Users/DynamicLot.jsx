@@ -298,7 +298,7 @@ const DynamicLot = () => {
 
             const booking = await parkingService.createBooking(bookingData);
             console.log('✅ Booking created:', booking);
-            console.log('💳 Payment created:', booking.payment);
+            console.log('💳 Payments created:', booking.payments);
             
             // Close modal
             setShowPaymentModal(false);

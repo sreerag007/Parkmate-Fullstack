@@ -191,6 +191,9 @@ const parkingService = {
     const response = await api.post('/tasks/', taskData);
     return response.data;
   },
+
+  // Export api for direct use if needed
+  api: api,
 };
 
 export default parkingService;

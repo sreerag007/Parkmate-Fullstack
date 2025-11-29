@@ -337,57 +337,106 @@ const BookingConfirmation = () => {
                 <span className="value">{booking.booking_type}</span>
               </div>
 
-              {/* Payment Information */}
-              {booking.payment && (
+              {/* Payment Breakdown - All Payments */}
+              {booking.payments && booking.payments.length > 0 && (
                 <>
                   <div className="payment-divider"></div>
-                  <div className="detail-row payment-section">
-                    <span className="label">💳 Payment Method:</span>
-                    <span className="value">
-                      {booking.payment.payment_method === 'CC' ? '💳 Credit Card' : 
-                       booking.payment.payment_method === 'UPI' ? '📱 UPI / QR Code' : 
-                       '💵 Cash'}
-                    </span>
+                  <div className="payment-section-header">
+                    <h3>💳 Payment Breakdown</h3>
                   </div>
-                  <div className="detail-row payment-section">
-                    <span className="label">💰 Payment Amount:</span>
-                    <span className="value">₹{booking.payment.amount}</span>
+                  
+                  {/* Individual Payment Cards */}
+                  <div className="payments-container">
+                    {booking.payments.map((payment, index) => (
+                      <div key={index} className="payment-card">
+                        <div className="payment-card-header">
+                          <span className="payment-type-badge">
+                            {payment.payment_type === 'Slot Payment' ? '🅿️' : '🧼'} {payment.payment_type}
+                          </span>
+                          <span className={`payment-status-badge payment-${payment.status.toLowerCase()}`}>
+                            {payment.status === 'SUCCESS' ? '✅ Success' : 
+                             payment.status === 'PENDING' ? '⏳ Pending' : 
+                             '❌ Failed'}
+                          </span>
+                        </div>
+                        
+                        <div className="payment-card-content">
+                          <div className="payment-detail">
+                            <span className="detail-label">Payment Method:</span>
+                            <span className="detail-value">
+                              {payment.payment_method === 'CC' ? '💳 Credit Card' : 
+                               payment.payment_method === 'UPI' ? '📱 UPI / QR Code' : 
+                               '💵 Cash'}
+                            </span>
+                          </div>
+                          <div className="payment-detail">
+                            <span className="detail-label">Amount:</span>
+                            <span className="detail-value amount-highlight">₹{parseFloat(payment.amount).toFixed(2)}</span>
+                          </div>
+                          {payment.transaction_id && (
+                            <div className="payment-detail">
+                              <span className="detail-label">Transaction ID:</span>
+                              <span className="detail-value transaction-id">{payment.transaction_id}</span>
+                            </div>
+                          )}
+                          <div className="payment-detail">
+                            <span className="detail-label">Date:</span>
+                            <span className="detail-value">{new Date(payment.created_at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="detail-row payment-section">
-                    <span className="label">📊 Payment Status:</span>
-                    <span className={`value payment-status payment-${booking.payment.status.toLowerCase()}`}>
-                      {booking.payment.status === 'SUCCESS' ? '✅ Payment Successful' : 
-                       booking.payment.status === 'PENDING' ? '⏳ Payment Pending' : 
-                       '❌ Payment Failed'}
-                    </span>
-                  </div>
-                  {booking.payment.transaction_id && (
-                    <div className="detail-row payment-section">
-                      <span className="label">🔐 Transaction ID:</span>
-                      <span className="value transaction-id">{booking.payment.transaction_id}</span>
-                    </div>
-                  )}
                 </>
               )}
 
               {/* Carwash Service Details */}
-              {booking.carwash ? (
+              {booking.carwash && (
                 <>
                   <div className="carwash-divider"></div>
-                  <div className="detail-row carwash-section">
-                    <span className="label">🧼 Car Wash Service:</span>
-                    <span className="value">{booking.carwash.carwash_type_detail?.name || 'Service Booked'}</span>
+                  <div className="carwash-section-header">
+                    <h3>🧼 Car Wash Service</h3>
                   </div>
-                  <div className="detail-row carwash-section">
-                    <span className="label">💰 Service Price:</span>
-                    <span className="value">₹{booking.carwash.carwash_type_detail?.price || booking.carwash.price}</span>
+                  <div className="carwash-detail-card">
+                    <div className="detail-row">
+                      <span className="label">Service Type:</span>
+                      <span className="value">{booking.carwash.carwash_type_detail?.name || 'Service Booked'}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="label">Service Description:</span>
+                      <span className="value">{booking.carwash.carwash_type_detail?.description || 'N/A'}</span>
+                    </div>
+                    <div className="detail-row highlight">
+                      <span className="label">Service Price:</span>
+                      <span className="value price-value">₹{parseFloat(booking.carwash.carwash_type_detail?.price || booking.carwash.price).toFixed(2)}</span>
+                    </div>
                   </div>
                 </>
-              ) : (
-                <div className="detail-row no-service">
-                  <span className="label">🧼 Car Wash Service:</span>
-                  <span className="value text-muted">Not selected</span>
-                </div>
+              )}
+
+              {/* Total Amount Summary */}
+              {booking.total_amount && (
+                <>
+                  <div className="total-divider"></div>
+                  <div className="total-amount-card">
+                    <div className="total-amount-content">
+                      <span className="total-label">Total Amount</span>
+                      <span className="total-value">₹{parseFloat(booking.total_amount).toFixed(2)}</span>
+                    </div>
+                    <div className="total-breakdown">
+                      <div className="breakdown-item">
+                        <span>Parking Slot:</span>
+                        <span>₹{parseFloat(booking.price).toFixed(2)}</span>
+                      </div>
+                      {booking.carwash && (
+                        <div className="breakdown-item">
+                          <span>Car Wash:</span>
+                          <span>₹{parseFloat(booking.carwash.carwash_type_detail?.price || booking.carwash.price).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 

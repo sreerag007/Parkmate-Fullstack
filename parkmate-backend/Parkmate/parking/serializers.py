@@ -337,6 +337,8 @@ class BookingSerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
     carwash = serializers.SerializerMethodField()
     payment = serializers.SerializerMethodField()
+    payments = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -359,9 +361,11 @@ class BookingSerializer(serializers.ModelSerializer):
             "remaining_time",
             "carwash",
             "payment",
+            "payments",
+            "total_amount",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment", "payments", "total_amount"]
 
     def get_lot_detail(self, obj):
         """Get lot details from the slot"""
@@ -371,12 +375,35 @@ class BookingSerializer(serializers.ModelSerializer):
         return None
 
     def get_payment(self, obj):
-        """Get payment details if exists"""
+        """Get first payment details if exists (for backward compatibility)"""
         try:
-            payment = obj.payment
-            return PaymentSerializer(payment).data
+            payments = obj.payments.all()
+            if payments.exists():
+                return PaymentSerializer(payments.first()).data
+            return None
         except:
             return None
+
+    def get_payments(self, obj):
+        """Get all payment details for this booking"""
+        try:
+            payments = obj.payments.all()
+            if payments.exists():
+                return PaymentSerializer(payments, many=True).data
+            return []
+        except:
+            return []
+
+    def get_total_amount(self, obj):
+        """Calculate total amount (slot price + carwash price if exists)"""
+        total = float(obj.price) if obj.price else 0.0
+        
+        # Add carwash price if exists
+        carwash = obj.booking_by_user.first()
+        if carwash and carwash.price:
+            total += float(carwash.price)
+        
+        return round(total, 2)
 
 
     def get_is_expired(self, obj):
@@ -455,6 +482,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     booking_read = PaymentBookingNestedSerializer(source="booking", read_only=True)
     payment_method = serializers.ChoiceField(choices=PAYMENT_CHOICES)
     status = serializers.ChoiceField(choices=Payment.PAYMENT_STATUS_CHOICES)
+    payment_type = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -468,8 +496,29 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "transaction_id",
             "created_at",
+            "payment_type",
         ]
-        read_only_fields = ["pay_id", "user", "created_at"]
+        read_only_fields = ["pay_id", "user", "created_at", "payment_type"]
+
+    def get_payment_type(self, obj):
+        """Determine payment type based on order (first=slot, rest=carwash)"""
+        booking = obj.booking
+        # Get all payments for this booking ordered by creation date
+        payments = booking.payments.all().order_by('created_at')
+        
+        if not payments.exists():
+            return "Unknown"
+        
+        # Get the index of current payment
+        payment_list = list(payments)
+        try:
+            index = payment_list.index(obj)
+            if index == 0:
+                return "Slot Payment"
+            else:
+                return "Car Wash Payment"
+        except:
+            return "Unknown"
 
 
 

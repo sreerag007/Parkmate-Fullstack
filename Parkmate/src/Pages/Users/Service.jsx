@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
+import PaymentModal from '../../Components/PaymentModal'
 import './Service.scss'
 
 export default function Service() {
@@ -19,6 +21,8 @@ export default function Service() {
   const [selectedEmployee, setSelectedEmployee] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [isBookingService, setIsBookingService] = useState(false)
 
   const loadData = async () => {
     try {
@@ -94,37 +98,88 @@ export default function Service() {
     }
   }
 
-  const bookService = async () => {
-    if (!selectedBooking) return alert('Please select a booking first')
-    if (!selectedService) return alert('Please select a car wash service')
-    if (!selectedEmployee) return alert('No employee available')
+  const bookService = () => {
+    if (!selectedBooking) {
+      toast.warning('⚠️ Please select a booking first')
+      return
+    }
+    if (!selectedService) {
+      toast.warning('⚠️ Please select a car wash service')
+      return
+    }
+    if (!selectedEmployee) {
+      toast.warning('⚠️ No employee available')
+      return
+    }
+
+    // Show payment modal
+    setShowPaymentModal(true)
+  }
+
+  const handlePaymentConfirm = async (paymentData) => {
+    if (!selectedBooking) return
+    if (!selectedService) return
 
     const carwashType = carwashTypes.find(ct => ct.carwash_type_id === selectedService)
     if (!carwashType) return
 
-    const ok = window.confirm(`Book ${carwashType.name} for ₹${carwashType.price}?`)
-    if (!ok) return
-
     try {
-      const carwashData = {
-        booking: selectedBooking,
-        carwash_type: selectedService,
-        employee: selectedEmployee,
-        price: carwashType.price
-      }
-
-      console.log('🧼 Creating carwash:', carwashData)
-      await parkingService.createCarwash(carwashData)
+      setIsBookingService(true)
+      console.log('💳 Processing car wash payment...', paymentData)
       
-      alert(`Car wash service '${carwashType.name}' booked successfully!`)
+      // Call backend to process payment and create car wash booking
+      const response = await parkingService.api.post(
+        `/carwashes/pay_for_service/`,
+        {
+          booking_id: selectedBooking,
+          carwash_type_id: selectedService,
+          payment_method: paymentData.payment_method,
+          amount: paymentData.amount
+        }
+      )
+      
+      console.log('✅ Car wash service booked successfully:', response.data)
+      
+      toast.success('✅ Car Wash Service booked successfully!', { autoClose: 3000 })
+      
+      // Close the payment modal immediately
+      setShowPaymentModal(false)
+      
       // Refresh bookings to update carwash status
       await refreshBookings()
-      // Navigate back to the booking timer view
-      navigate(`/booking-confirmation?booking=${selectedBooking}`)
+      
+      // Navigate back to the booking timer view after a brief delay
+      setTimeout(() => {
+        navigate(`/booking-confirmation?booking=${selectedBooking}`)
+      }, 1000)
+      
     } catch (err) {
-      console.error('❌ Error booking service:', err)
-      console.error('❌ Error response:', err.response?.data)
-      alert('Failed to book car wash service. Please try again.')
+      console.error('❌ Error processing car wash payment:', err)
+      console.error('❌ Full error response:', err.response?.data)
+      console.log('📋 Request payload was:', {
+        booking_id: selectedBooking,
+        carwash_type_id: selectedService,
+        payment_method: paymentData.payment_method,
+        amount: paymentData.amount
+      })
+      
+      const errorMsg = err.response?.data?.error || err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to book car wash service'
+      
+      // Check if it's a duplicate booking error
+      if (errorMsg.includes('already active')) {
+        toast.warning(`⚠️ ${errorMsg}`, { autoClose: 4000 })
+        // Close modal and redirect to timer
+        setShowPaymentModal(false)
+        setTimeout(() => {
+          navigate(`/booking-confirmation?booking=${selectedBooking}`)
+        }, 1500)
+      } else {
+        toast.error(`❌ ${errorMsg}`, { autoClose: 4000 })
+        // Keep modal open for retry
+      }
+    } finally {
+      setIsBookingService(false)
+      setShowPaymentModal(false)
     }
   }
 
@@ -172,6 +227,21 @@ export default function Service() {
 
   return (
     <div className="service-root container">
+      {/* Payment Modal */}
+      {showPaymentModal && selectedService && (
+        <PaymentModal
+          price={carwashTypes.find(ct => ct.carwash_type_id === selectedService)?.price || 0}
+          onConfirm={handlePaymentConfirm}
+          onClose={() => setShowPaymentModal(false)}
+          isLoading={isBookingService}
+          purpose="carwash"
+          metadata={{
+            serviceName: carwashTypes.find(ct => ct.carwash_type_id === selectedService)?.name || 'Car Wash Service',
+            parkingLot: bookings.find(b => b.booking_id === selectedBooking)?.lot_read?.lot_name
+          }}
+        />
+      )}
+
       <h2>Car Wash Services</h2>
       <p className="muted">Select your booking and choose a car wash service.</p>
 
@@ -236,10 +306,10 @@ export default function Service() {
             <button 
               className="btn primary" 
               onClick={bookService} 
-              disabled={!selectedBooking || !selectedService || selectedBookingHasCarwash}
+              disabled={!selectedBooking || !selectedService || selectedBookingHasCarwash || isBookingService}
               title={selectedBookingHasCarwash ? "This booking already has a car wash service" : ""}
             >
-              {selectedBookingHasCarwash ? "🚫 Service Already Active" : "Book Car Wash Service"}
+              {selectedBookingHasCarwash ? "🚫 Service Already Active" : isBookingService ? "⏳ Processing..." : "Book Car Wash Service"}
             </button>
             <button 
               className="btn secondary" 

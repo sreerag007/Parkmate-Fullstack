@@ -1,0 +1,396 @@
+/* Card Payment Popup Styles */
+
+.card-payment-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.card-payment-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 450px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.card-header {
+  background: linear-gradient(135deg, #0b5ed7 0%, #0d47a1 100%);
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-close-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.card-close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Content */
+.card-content {
+  padding: 30px;
+}
+
+/* Form Styles */
+.card-form {
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #0b5ed7;
+  box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.1);
+  background-color: #f8fbff;
+}
+
+.form-group input:disabled {
+  background-color: #f8f9fa;
+  color: #adb5bd;
+  cursor: not-allowed;
+}
+
+.form-group input::placeholder {
+  color: #adb5bd;
+}
+
+/* Error Text */
+.error-text {
+  display: block;
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Form Row (for side-by-side fields) */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
+
+/* Payment Info */
+.payment-info {
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  padding: 18px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  border: 1px solid #e9ecef;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row.highlight {
+  background: white;
+  padding: 12px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  border-bottom: none;
+}
+
+.info-row .label {
+  font-weight: 500;
+  color: #666;
+  font-size: 13px;
+}
+
+.info-row .value {
+  font-weight: 600;
+  color: #0b5ed7;
+  font-size: 14px;
+}
+
+.info-row.highlight .value {
+  font-size: 18px;
+  color: #0b5ed7;
+}
+
+/* Security Note */
+.security-note {
+  font-size: 12px;
+  color: #28a745;
+  text-align: center;
+  margin: 0;
+  padding: 10px;
+  background: #d4edda;
+  border-radius: 6px;
+  border: 1px solid #c3e6cb;
+}
+
+/* Success State */
+.payment-success {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.success-icon {
+  font-size: 72px;
+  margin-bottom: 15px;
+  animation: popIn 0.5s ease-out;
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.payment-success h3 {
+  font-size: 24px;
+  color: #27ae60;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.payment-success p {
+  margin: 8px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.amount-display {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0b5ed7;
+  margin-top: 15px !important;
+}
+
+.confirmation-text {
+  font-size: 13px;
+  color: #888;
+  margin-top: 12px !important;
+  font-style: italic;
+}
+
+/* Actions */
+.card-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 30px 30px 30px;
+  border-top: 1px solid #e9ecef;
+  padding-top: 20px;
+}
+
+.btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0b5ed7 0%, #0d47a1 100%);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(11, 94, 215, 0.3);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #dee2e6;
+  transform: translateY(-2px);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .card-payment-container {
+    width: 95%;
+    border-radius: 12px;
+  }
+
+  .card-header h2 {
+    font-size: 18px;
+  }
+
+  .card-content {
+    padding: 20px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .card-actions {
+    padding: 0 20px 20px 20px;
+    padding-top: 15px;
+  }
+
+  .btn {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .payment-info {
+    padding: 15px;
+  }
+
+  .info-row .label,
+  .info-row .value {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .card-header h2 {
+    font-size: 16px;
+  }
+
+  .form-group label {
+    font-size: 12px;
+  }
+
+  .form-group input {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .payment-info {
+    padding: 12px;
+  }
+
+  .security-note {
+    font-size: 11px;
+  }
+}

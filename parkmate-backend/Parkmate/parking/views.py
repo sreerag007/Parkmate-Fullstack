@@ -918,6 +918,153 @@ class CarwashViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def pay_for_service(self, request):
+        """Create payment and car wash booking for a service"""
+        try:
+            user = request.user
+            
+            # Get user profile
+            try:
+                user_profile = UserProfile.objects.get(auth_user=user)
+            except UserProfile.DoesNotExist:
+                return Response(
+                    {'error': 'User profile not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get booking ID from request
+            booking_id = request.data.get('booking_id')
+            if not booking_id:
+                return Response(
+                    {'error': 'booking_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get the booking
+            try:
+                booking = Booking.objects.get(booking_id=booking_id, user=user_profile)
+            except Booking.DoesNotExist:
+                return Response(
+                    {'error': 'Booking not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Check if a car wash service is already booked for this booking
+            existing_carwash = Carwash.objects.filter(booking=booking).first()
+            if existing_carwash:
+                return Response(
+                    {'error': 'A car wash service is already active for this booking. Complete or cancel the existing service first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get payment data from request
+            payment_method = request.data.get('payment_method', 'UPI')
+            amount = request.data.get('amount', 0.00)
+            carwash_type_id = request.data.get('carwash_type_id')
+            
+            # Validate payment method
+            valid_methods = ['CC', 'UPI', 'Cash']
+            if payment_method not in valid_methods:
+                return Response(
+                    {'error': f'Invalid payment method. Must be one of: {valid_methods}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate amount
+            try:
+                amount = float(amount)
+                if amount <= 0:
+                    return Response(
+                        {'error': 'Amount must be greater than 0'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'Invalid amount format'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Note: We allow multiple payments for one booking (slot payment + car wash payment)
+            # The duplicate check below only prevents multiple car wash services
+            
+            # Determine payment status based on method
+            payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
+            
+            # Generate transaction ID
+            import time
+            transaction_id = f'CW-{booking.booking_id}-{int(time.time())}'
+            
+            # Create payment record
+            payment = Payment.objects.create(
+                booking=booking,
+                user=user_profile,
+                payment_method=payment_method,
+                amount=amount,
+                status=payment_status,
+                transaction_id=transaction_id
+            )
+            
+            print(f"✅ Car Wash Payment created: {payment.pay_id}")
+            print(f"   - Transaction ID: {transaction_id}")
+            print(f"   - Method: {payment_method}")
+            print(f"   - Amount: ₹{amount}")
+            print(f"   - Status: {payment_status}")
+            
+            # If carwash_type_id provided, create car wash booking
+            carwash = None
+            if carwash_type_id:
+                try:
+                    carwash_type = Carwash_type.objects.get(carwash_type_id=carwash_type_id)
+                    print(f"🔍 Carwash type found: {carwash_type.name}")
+                    
+                    # For now, assign to the first available employee
+                    # In production, this would be based on availability
+                    print(f"🔍 Looking for employee with owner: {booking.lot.owner}")
+                    employee = Employee.objects.filter(owner=booking.lot.owner).first()
+                    print(f"🔍 Employee found: {employee}")
+                    
+                    if employee:
+                        carwash = Carwash.objects.create(
+                            booking=booking,
+                            carwash_type=carwash_type,
+                            employee=employee,
+                            price=amount
+                        )
+                        print(f"✅ Car Wash booking created: {carwash.carwash_id}")
+                        print(f"   - Service: {carwash_type.name}")
+                        print(f"   - Employee: {employee.name}")
+                    else:
+                        print(f"⚠️ No employee found for owner {booking.lot.owner}")
+                except Carwash_type.DoesNotExist:
+                    print(f"⚠️ Carwash type {carwash_type_id} not found, payment created without service booking")
+                except Exception as e:
+                    print(f"⚠️ Error creating car wash booking: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Return success response
+            return Response({
+                'message': 'Car Wash Service booked successfully ✅',
+                'payment_id': payment.pay_id,
+                'transaction_id': transaction_id,
+                'payment_method': payment_method,
+                'amount': amount,
+                'payment_status': payment_status,
+                'carwash_id': carwash.carwash_id if carwash else None,
+                'booking_id': booking_id
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            print(f"❌ Error processing car wash payment: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class CarwashTypeViewSet(ModelViewSet):
     serializer_class=CarwashTypeSerializer
     queryset=Carwash_type.objects.all()

@@ -240,7 +240,7 @@ class Payment(models.Model):
     ]
 
     pay_id=models.AutoField(primary_key=True)
-    booking=models.OneToOneField(to=Booking,on_delete=models.CASCADE,related_name='payment')
+    booking=models.ForeignKey(to=Booking,on_delete=models.CASCADE,related_name='payments')
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,related_name='payments_made_by_user')
     payment_method=models.CharField(max_length=100,choices=PAYMENT_CHOICES)
     amount=models.DecimalField(max_digits=8,decimal_places=2,default=0.00)
