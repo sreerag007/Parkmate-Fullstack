@@ -21,6 +21,8 @@ from .serializers import (UserRegisterSerializer, OwnerRegisterSerializer,
                           EmployeeSerializer,TasksSerializer,ReviewSerializer,
                           LoginSerializer)
 
+from .notification_utils import send_ws_notification
+
 
 # Custom Permission Classes
 class IsAdmin(BasePermission):
@@ -803,6 +805,13 @@ class BookingViewSet(ModelViewSet):
             
             print(f"✅ New booking {new_booking.booking_id} created with payment, slot {slot.slot_id} marked as unavailable")
             
+            # Event 3: Send "Renew Success" notification to user
+            send_ws_notification(
+                booking.user.auth_user.id,
+                "success",
+                f"Booking renewed successfully! Your new booking ID is {new_booking.booking_id}."
+            )
+            
             serializer = self.get_serializer(new_booking)
             return Response({
                 'message': 'Booking renewed successfully',
@@ -817,6 +826,17 @@ class BookingViewSet(ModelViewSet):
             )
         except Exception as e:
             print(f"❌ Error renewing booking: {str(e)}")
+            
+            # Event 4: Send "Renew Failure" notification to user
+            try:
+                send_ws_notification(
+                    user.userprofile.id if hasattr(user, 'userprofile') else user.id,
+                    "error",
+                    f"Renewal failed: {str(e)}. Please try again."
+                )
+            except:
+                pass
+            
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

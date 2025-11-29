@@ -136,12 +136,20 @@ const BookingConfirmation = () => {
         if (timerIntervalRef.current) {
           clearInterval(timerIntervalRef.current);
         }
+        // Event 2: Timer = 0 (Booking expired)
+        notify.info("Your booking has expired. Slot released.");
         // Poll backend immediately to get updated status
         pollBooking();
       } else {
         setTimeLeft(remaining);
         // Make sure we're not showing as expired if there's still time
         setIsExpired(false);
+        
+        // Event 1: Timer < 5 minutes
+        // Only show once when it hits 5 minutes
+        if (remaining === 5 * 60 * 1000) {
+          notify.warning("Your booking will expire in 5 minutes!");
+        }
       }
     };
 

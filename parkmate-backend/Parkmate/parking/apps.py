@@ -4,3 +4,8 @@ from django.apps import AppConfig
 class ParkingConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'parking'
+
+    def ready(self):
+        """Import signals when app is ready"""
+        import parking.signals  # noqa
+

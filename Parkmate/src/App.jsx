@@ -32,32 +32,41 @@ import EmployeeRegister from './Pages/Auth/EmployeeRegister'
 import AdminLogin from './Pages/Auth/AdminLogin'
 
 import { DataProvider } from './Context/DataContext'
+import { useAuth } from './Context/AuthContext'
+import { useWebSocketNotifications } from './hooks/useWebSocketNotifications'
 
-function App() {
+// Wrapper component for WebSocket notifications
+function AppWithWebSocket() {
+  const { user, owner, admin } = useAuth();
+  
+  // Get the currently logged in user's ID
+  const userId = user?.userId || owner?.userId || admin?.userId;
+  
+  // Initialize WebSocket notifications - always call, hook handles null userId
+  useWebSocketNotifications(userId);
+
   return (
-    <AuthProvider>
-      <DataProvider>
-        <BrowserRouter>
-          <Navbar />
-          
-          {/* Global Toast Notification Container */}
-          <ToastContainer
-            position="top-right"
-            autoClose={4000}
-            hideProgressBar={false}
-            newestOnTop={true}
-            closeOnClick
-            pauseOnHover
-            draggable
-            theme="colored"
-          />
+    <BrowserRouter>
+      <Navbar />
+      
+      {/* Global Toast Notification Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="colored"
+      />
 
-          <div className="app-content">
-            <div className="container">
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<UserLand />} />
-                <Route path="/login" element={<UserLogin />} />
+      <div className="app-content">
+        <div className="container">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<UserLand />} />
+            <Route path="/login" element={<UserLogin />} />
                 <Route path="/register" element={<UserRegister />} />
                 <Route path="/owner/login" element={<OwnerLogin />} />
                 <Route path="/owner/register" element={<OwnerRegister />} />
@@ -99,9 +108,17 @@ function App() {
             </div>
           </div>
         </BrowserRouter>
-      </DataProvider>
-    </AuthProvider>
-  )
-}
+      );
+    }
 
-export default App
+    function App() {
+      return (
+        <AuthProvider>
+          <DataProvider>
+            <AppWithWebSocket />
+          </DataProvider>
+        </AuthProvider>
+      )
+    }
+
+    export default App
