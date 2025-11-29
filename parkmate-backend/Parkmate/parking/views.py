@@ -1261,10 +1261,11 @@ class VerifyCashPaymentView(APIView):
             lot_owner = booking.lot.owner
             
             print(f"🔐 Lot owner: {lot_owner} (id={lot_owner.id})")
+            print(f"   Lot: {booking.lot.lot_name}")
             
             try:
                 current_owner = OwnerProfile.objects.get(auth_user=user)
-                print(f"✓ Found owner profile for user: {current_owner}")
+                print(f"✓ Found owner profile for user: {current_owner} (id={current_owner.id})")
             except OwnerProfile.DoesNotExist:
                 print(f"❌ User {user.username} is not an owner")
                 return Response(
@@ -1272,10 +1273,12 @@ class VerifyCashPaymentView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            if current_owner != lot_owner:
+            print(f"🔐 Comparing: current_owner.id ({current_owner.id}) vs lot_owner.id ({lot_owner.id})")
+            
+            if current_owner.id != lot_owner.id:
                 print(f"❌ Owner mismatch: {current_owner.id} != {lot_owner.id}")
                 return Response(
-                    {'error': 'You do not have permission to verify this payment'},
+                    {'error': f'You do not have permission to verify this payment. You own lots for owner {current_owner.id}, but this payment is for owner {lot_owner.id}'},
                     status=status.HTTP_403_FORBIDDEN
                 )
             
@@ -1335,4 +1338,116 @@ class VerifyCashPaymentView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class OwnerPaymentsView(APIView):
+    """
+    Endpoint to fetch all payment receipts for owner's parking lots.
+    Returns payments for all bookings in the owner's lots.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Get all payments for owner's lots.
+        
+        Query params:
+        - status: filter by status (SUCCESS, PENDING, FAILED)
+        - payment_method: filter by method (Cash, UPI, CC)
+        
+        Returns:
+        [
+            {
+                "pay_id": 1,
+                "user_name": "John Doe",
+                "lot_name": "Premium Lot",
+                "payment_type": "Slot Payment",
+                "payment_method": "UPI",
+                "amount": "500.00",
+                "status": "SUCCESS",
+                "transaction_id": "TXN-123",
+                "created_at": "2025-11-29T10:30:00Z"
+            }
+        ]
+        """
+        try:
+            user = request.user
+            
+            # Check if user is owner
+            try:
+                owner = OwnerProfile.objects.get(auth_user=user)
+            except OwnerProfile.DoesNotExist:
+                return Response(
+                    {'error': 'Only parking lot owners can access payments'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            print(f"📋 Fetching payments for owner: {owner.firstname} {owner.lastname}")
+            
+            # Get all lots owned by this owner
+            owner_lots = P_Lot.objects.filter(owner=owner)
+            lot_ids = list(owner_lots.values_list('lot_id', flat=True))
+            
+            print(f"   Owner has {len(lot_ids)} lots")
+            
+            # Get all bookings in owner's lots
+            bookings = Booking.objects.filter(lot_id__in=lot_ids)
+            
+            # Get all payments for these bookings
+            payments = Payment.objects.filter(
+                booking__in=bookings
+            ).select_related('booking__user', 'booking__lot', 'booking__slot').order_by('-created_at')
+            
+            # Apply optional filters
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                payments = payments.filter(status=status_filter)
+            
+            method_filter = request.query_params.get('payment_method')
+            if method_filter:
+                payments = payments.filter(payment_method=method_filter)
+            
+            print(f"   Found {payments.count()} payments")
+            
+            # Format response data
+            serializer = PaymentSerializer(payments, many=True)
+            response_data = []
+            
+            for payment_data in serializer.data:
+                booking = Payment.objects.get(pay_id=payment_data['pay_id']).booking
+                user_profile = booking.user
+                
+                # Determine payment type based on order
+                all_booking_payments = booking.payments.all().order_by('created_at')
+                payment_list = list(all_booking_payments)
+                payment_obj = Payment.objects.get(pay_id=payment_data['pay_id'])
+                payment_index = list(all_booking_payments).index(payment_obj)
+                payment_type = "Slot Payment" if payment_index == 0 else "Car Wash Payment"
+                
+                response_data.append({
+                    'pay_id': payment_data['pay_id'],
+                    'user_name': f"{user_profile.firstname} {user_profile.lastname}",
+                    'lot_name': booking.lot.lot_name,
+                    'slot_number': booking.slot.slot_id if booking.slot else 'N/A',
+                    'slot_type': booking.slot.vehicle_type if booking.slot else 'Standard',
+                    'payment_type': payment_type,
+                    'payment_method': payment_data['payment_method'],
+                    'amount': str(payment_data['amount']),
+                    'status': payment_data['status'],
+                    'transaction_id': payment_data['transaction_id'] or 'N/A',
+                    'created_at': payment_data['created_at']
+                })
+            
+            return Response({
+                'count': len(response_data),
+                'results': response_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"❌ Error fetching owner payments: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 

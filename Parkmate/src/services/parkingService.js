@@ -135,6 +135,17 @@ const parkingService = {
     return response.data;
   },
 
+  getOwnerPayments: async (filters = {}) => {
+    let url = '/owner/payments/';
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.payment_method) params.append('payment_method', filters.payment_method);
+    if (params.toString()) url += '?' + params.toString();
+    
+    const response = await api.get(url);
+    return response.data;
+  },
+
   // ===== REVIEWS =====
   getReviews: async (lotId = null) => {
     const url = lotId ? `/reviews/?lot=${lotId}` : '/reviews/';

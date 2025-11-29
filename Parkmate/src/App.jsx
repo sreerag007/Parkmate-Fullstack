@@ -13,6 +13,7 @@ import OwnerDashboard from './Pages/Owner/OwnerDashboard'
 import OwnerLots from './Pages/Owner/OwnerLots'
 import OwnerServices from './Pages/Owner/OwnerServices'
 import OwnerBookings from './Pages/Owner/OwnerBookings'
+import OwnerPayments from './Pages/Owner/OwnerPayments'
 import OwnerProfile from './Pages/Owner/OwnerProfile'
 import AdminLayout from './Pages/Admin/AdminLayout'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
@@ -63,6 +64,7 @@ function App() {
                     <Route index element={<OwnerDashboard />} />
                     <Route path="lots" element={<OwnerLots />} />
                     <Route path="bookings" element={<OwnerBookings />} />
+                    <Route path="payments" element={<OwnerPayments />} />
                     <Route path="services" element={<OwnerServices />} />
                     <Route path="profile" element={<OwnerProfile />} />
                   </Route>

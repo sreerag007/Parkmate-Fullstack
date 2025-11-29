@@ -59,6 +59,9 @@ const OwnerLayout = () => {
                     <Link to="/owner/bookings" className={`nav-item ${isActive('/owner/bookings')}`} onClick={handleNavClick}>
                         <span className="icon">📅</span> Bookings
                     </Link>
+                    <Link to="/owner/payments" className={`nav-item ${isActive('/owner/payments')}`} onClick={handleNavClick}>
+                        <span className="icon">💳</span> Payments
+                    </Link>
                     <Link to="/owner/services" className={`nav-item ${isActive('/owner/services')}`} onClick={handleNavClick}>
                         <span className="icon">🛠️</span> Services
                     </Link>

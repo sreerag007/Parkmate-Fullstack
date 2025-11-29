@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import(
     AuthViewSet,UserProfileViewSet,OwnerProfileViewSet,P_LotVIewSet,P_SlotViewSet,BookingViewSet,
     PaymentViewSet,TasksViewSet,CarwashViewSet,CarwashTypeViewSet,
-    EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView, ###
+    EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView,OwnerPaymentsView, ###
 )
 
 router=DefaultRouter()
@@ -35,4 +35,5 @@ urlpatterns = [
     path('auth/verify/', auth_verify, name='auth-verify'),
     
     path('owner/payments/<str:payment_id>/verify/', VerifyCashPaymentView.as_view(), name='verify-cash-payment'),
+    path('owner/payments/', OwnerPaymentsView.as_view(), name='owner-payments'),
 ]
