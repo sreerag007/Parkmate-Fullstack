@@ -534,8 +534,10 @@ class BookingViewSet(ModelViewSet):
         if overlapping:
             raise ValidationError({'slot': 'This slot is currently booked'})
         
-        # Create the instant booking
+        # Create the instant booking with payment
         from django.db import transaction
+        import time
+        
         with transaction.atomic():
             booking = Booking.objects.create(
                 user=user_profile,
@@ -552,11 +554,33 @@ class BookingViewSet(ModelViewSet):
             # Mark slot as unavailable
             slot.is_available = False
             slot.save()
+            
+            # Create payment record atomically with booking
+            payment_method = self.request.data.get('payment_method', 'UPI')
+            amount = self.request.data.get('amount', float(slot.price))
+            
+            # Determine payment status based on method
+            # Cash payments are PENDING, others are SUCCESS
+            payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
+            
+            # Generate transaction ID
+            transaction_id = f'PM-{booking.booking_id}-{int(time.time())}'
+            
+            from parking.models import Payment
+            payment = Payment.objects.create(
+                booking=booking,
+                user=user_profile,
+                payment_method=payment_method,
+                amount=amount,
+                status=payment_status,
+                transaction_id=transaction_id
+            )
+            
+            print(f"✅ BOOKING created: {booking.booking_id}, status=booked, expires at {end_time}")
+            print(f"💳 PAYMENT created: {payment.pay_id}, method={payment_method}, status={payment_status}")
         
         # Set serializer instance for proper response serialization
         serializer.instance = booking
-        
-        print(f"✅ BOOKING created: {booking.booking_id}, status=ACTIVE, expires at {end_time}")
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -723,7 +747,7 @@ class BookingViewSet(ModelViewSet):
                 vehicle_number=booking.vehicle_number,
                 booking_type=booking.booking_type,
                 price=booking.price,
-                status='ACTIVE',  # Renewed booking is always instant and ACTIVE
+                status='booked',  # Renewed booking is always instant and 'booked' (standardized)
                 start_time=new_start_time,
                 end_time=new_end_time
             )
@@ -740,7 +764,28 @@ class BookingViewSet(ModelViewSet):
             slot.is_available = False
             slot.save()
             
-            print(f"✅ New booking {new_booking.booking_id} created, slot {slot.slot_id} marked as unavailable")
+            # Create Payment for the renewed booking (with payment data from request if provided)
+            payment_method = request.data.get('payment_method', 'UPI')
+            amount = request.data.get('amount', float(new_booking.price))
+            payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
+            transaction_id = f'PM-{new_booking.booking_id}-{int(__import__("time").time())}'
+            
+            payment = Payment.objects.create(
+                booking=new_booking,
+                user=booking.user,
+                payment_method=payment_method,
+                amount=amount,
+                status=payment_status,
+                transaction_id=transaction_id
+            )
+            
+            print(f"💳 Payment created for renewed booking:")
+            print(f"   - Payment ID: {payment.pay_id}")
+            print(f"   - Method: {payment_method}")
+            print(f"   - Status: {payment_status}")
+            print(f"   - Transaction ID: {transaction_id}")
+            
+            print(f"✅ New booking {new_booking.booking_id} created with payment, slot {slot.slot_id} marked as unavailable")
             
             serializer = self.get_serializer(new_booking)
             return Response({

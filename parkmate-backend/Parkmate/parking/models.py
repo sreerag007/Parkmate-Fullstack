@@ -233,15 +233,23 @@ class Carwash(models.Model):
 
         
 class Payment(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed'),
+        ('PENDING', 'Pending'),
+    ]
 
     pay_id=models.AutoField(primary_key=True)
-    booking=models.ForeignKey(to=Booking,on_delete=models.CASCADE,related_name='payments_in_booking')
+    booking=models.OneToOneField(to=Booking,on_delete=models.CASCADE,related_name='payment')
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,related_name='payments_made_by_user')
     payment_method=models.CharField(max_length=100,choices=PAYMENT_CHOICES)
-    amount=models.DecimalField(max_digits=5,decimal_places=2,default=0.00)
+    amount=models.DecimalField(max_digits=8,decimal_places=2,default=0.00)
+    status=models.CharField(max_length=10,choices=PAYMENT_STATUS_CHOICES,default='SUCCESS')
+    transaction_id=models.CharField(max_length=100,blank=True,null=True)
+    created_at=models.DateTimeField(auto_now_add=True, null=True)
 
     def __str__(self):
-        return f"Payment {self.pay_id} for Booking {self.booking.booking_id}"    
+        return f"Payment {self.pay_id} for Booking {self.booking.booking_id} - {self.status}"    
 
     class Meta:
         db_table='PAYEMENT'

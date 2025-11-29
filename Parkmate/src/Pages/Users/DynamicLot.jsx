@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import parkingService from '../../services/parkingService';
+import PaymentModal from '../../Components/PaymentModal';
 import './Lot1.scss';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -42,6 +43,7 @@ const DynamicLot = () => {
     const [error, setError] = useState(null);
     const [now, setNow] = useState(Date.now());
     const [showBookingConfirm, setShowBookingConfirm] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isBooking, setIsBooking] = useState(false);
     const timeoutsRef = useRef({});
     const refreshIntervalRef = useRef(null);
@@ -212,11 +214,11 @@ const DynamicLot = () => {
         
         if (!slot || !slot.isAvailable) return alert('Slot already booked');
         
-        // Show confirmation modal instead of window.confirm
-        setShowBookingConfirm(true);
+        // Show payment modal instead of confirmation modal
+        setShowPaymentModal(true);
     };
 
-    const handleConfirmBooking = async () => {
+    const handlePaymentConfirm = async (paymentData) => {
         if (!selected) return;
         
         const slot = slots.find((s) => s.id === selected);
@@ -224,7 +226,8 @@ const DynamicLot = () => {
 
         try {
             setIsBooking(true);
-            console.log('🎯 Creating booking...');
+            console.log('🎯 Creating booking with payment...');
+            console.log('💳 Payment data:', paymentData);
             console.log('🎯 Booking type:', bookingType);
             
             // Get user's vehicle number from profile
@@ -234,16 +237,18 @@ const DynamicLot = () => {
             // Validate vehicle number exists
             if (!userProfile.vehicle_number) {
                 alert('Please add a vehicle number to your profile before booking');
-                setShowBookingConfirm(false);
+                setShowPaymentModal(false);
                 setIsBooking(false);
                 return;
             }
             
-            // Create booking via backend
+            // Create booking via backend with payment info
             const bookingData = {
                 slot: slot.backendId,
                 vehicle_number: userProfile.vehicle_number,
-                booking_type: bookingType || 'Instant'
+                booking_type: bookingType || 'Instant',
+                payment_method: paymentData.payment_method,
+                amount: paymentData.amount
             };
             
             // For advance bookings, validate and add start_time
@@ -292,10 +297,11 @@ const DynamicLot = () => {
             console.log('🎯 Final booking data:', bookingData);
 
             const booking = await parkingService.createBooking(bookingData);
-            console.log('🎯 Booking created:', booking);
+            console.log('✅ Booking created:', booking);
+            console.log('💳 Payment created:', booking.payment);
             
             // Close modal
-            setShowBookingConfirm(false);
+            setShowPaymentModal(false);
             
             // Redirect to booking confirmation page
             navigate(`/booking-confirmation?booking=${booking.booking_id}`);
@@ -308,7 +314,7 @@ const DynamicLot = () => {
             setSelected(null);
             setAdvanceStartTime(''); // Reset the time picker
         } catch (err) {
-            setShowBookingConfirm(false);
+            setShowPaymentModal(false);
             console.error('❌ Error booking slot:', err);
             
             // Log detailed error information
@@ -325,8 +331,8 @@ const DynamicLot = () => {
         }
     };
 
-    const handleCancelBooking = () => {
-        setShowBookingConfirm(false);
+    const handlePaymentCancel = () => {
+        setShowPaymentModal(false);
     };
 
     const releaseSlot = async (id) => {
@@ -515,56 +521,15 @@ const DynamicLot = () => {
                     <Link to="/profile" className="btn ghost" style={{ marginLeft: 8 }}>My Profile</Link>
                 </div>
 
-                {/* Booking Confirmation Modal */}
-                {showBookingConfirm && (
-                    <div className="modal-overlay" onClick={handleCancelBooking}>
-                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                            <h3>Confirm Booking</h3>
-                            <div className="booking-details">
-                                <p>
-                                    <strong>Slot:</strong> #{slots.find(s => s.id === selected)?.slotNumber}
-                                </p>
-                                <p>
-                                    <strong>Vehicle Type:</strong> {vehicleType}
-                                </p>
-                                <p>
-                                    <strong>Duration:</strong> 1 Hour
-                                </p>
-                                <p>
-                                    <strong>Price:</strong> ₹{slots.find(s => s.id === selected)?.price}
-                                </p>
-                                <p>
-                                    <strong>Payment Method:</strong> {payment === 'CC' ? 'Credit Card' : payment === 'Cash' ? 'Cash' : 'UPI'}
-                                </p>
-                                {bookingType && bookingType.toLowerCase() === 'advance' && advanceStartTime && (
-                                    <p>
-                                        <strong>Starts At:</strong> {new Date(advanceStartTime).toLocaleString()}
-                                    </p>
-                                )}
-                            </div>
-                            <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '15px', textAlign: 'center' }}>
-                                {bookingType && bookingType.toLowerCase() === 'advance' 
-                                    ? '⏰ Your advance booking will activate at the selected time. Timer will start automatically.' 
-                                    : 'Your booking will be valid for 1 hour from confirmation.'}
-                            </p>
-                            <div className="modal-actions">
-                                <button
-                                    className="btn danger"
-                                    onClick={handleCancelBooking}
-                                    disabled={isBooking}
-                                >
-                                    ✕ Cancel
-                                </button>
-                                <button
-                                    className="btn primary"
-                                    onClick={handleConfirmBooking}
-                                    disabled={isBooking}
-                                >
-                                    {isBooking ? '⏳ Booking...' : '✓ Confirm Booking'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                {/* Payment Modal */}
+                {showPaymentModal && (
+                    <PaymentModal
+                        slot={slots.find(s => s.id === selected)}
+                        price={slots.find(s => s.id === selected)?.price}
+                        onConfirm={handlePaymentConfirm}
+                        onClose={handlePaymentCancel}
+                        isLoading={isBooking}
+                    />
                 )}
             </div>
         </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import parkingService from '../../services/parkingService';
+import PaymentModal from '../../Components/PaymentModal';
 import './BookingConfirmation.scss';
 
 const BookingConfirmation = () => {
@@ -16,6 +17,7 @@ const BookingConfirmation = () => {
   const [renewError, setRenewError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showRenewConfirm, setShowRenewConfirm] = useState(false);
+  const [showRenewalPaymentModal, setShowRenewalPaymentModal] = useState(false);
   const timerIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
@@ -159,7 +161,59 @@ const BookingConfirmation = () => {
   }, [bookingId, isExpired, pollBooking]);
 
   const handleRenewClick = () => {
-    setShowRenewConfirm(true);
+    // Show payment modal for renewal
+    setShowRenewalPaymentModal(true);
+  };
+
+  const handleRenewalPaymentConfirm = async (paymentData) => {
+    if (!bookingId) return;
+
+    try {
+      setIsRenewing(true);
+      setRenewError(null);
+      setShowRenewalPaymentModal(false);
+      
+      console.log('💳 Renewing booking with payment:', paymentData);
+      const result = await parkingService.renewBooking(bookingId, {
+        payment_method: paymentData.payment_method,
+        amount: paymentData.amount
+      });
+      console.log('✅ Booking renewed:', result);
+      
+      if (result && result.new_booking && result.new_booking.booking_id) {
+        const newBookingId = result.new_booking.booking_id;
+        
+        // Clear old booking from sessionStorage
+        sessionStorage.removeItem(`booking_${bookingId}`);
+        
+        // Clear state before navigating
+        setBooking(null);
+        setIsExpired(false);
+        setTimeLeft(null);
+        
+        // Navigate with replace to prevent back button issues
+        setTimeout(() => {
+          navigate(`/booking-confirmation?booking=${newBookingId}`, { replace: true });
+        }, 100);
+      } else {
+        setRenewError('Renewal succeeded but could not get new booking ID');
+      }
+    } catch (err) {
+      console.error('❌ Error renewing booking:', err);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to renew booking';
+      console.error('Error details:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: errorMsg
+      });
+      setRenewError(errorMsg);
+    } finally {
+      setIsRenewing(false);
+    }
+  };
+
+  const handleRenewalPaymentCancel = () => {
+    setShowRenewalPaymentModal(false);
   };
 
   const handleConfirmRenewal = async () => {
@@ -282,6 +336,39 @@ const BookingConfirmation = () => {
                 <span className="label">⏱️ Booking Type:</span>
                 <span className="value">{booking.booking_type}</span>
               </div>
+
+              {/* Payment Information */}
+              {booking.payment && (
+                <>
+                  <div className="payment-divider"></div>
+                  <div className="detail-row payment-section">
+                    <span className="label">💳 Payment Method:</span>
+                    <span className="value">
+                      {booking.payment.payment_method === 'CC' ? '💳 Credit Card' : 
+                       booking.payment.payment_method === 'UPI' ? '📱 UPI / QR Code' : 
+                       '💵 Cash'}
+                    </span>
+                  </div>
+                  <div className="detail-row payment-section">
+                    <span className="label">💰 Payment Amount:</span>
+                    <span className="value">₹{booking.payment.amount}</span>
+                  </div>
+                  <div className="detail-row payment-section">
+                    <span className="label">📊 Payment Status:</span>
+                    <span className={`value payment-status payment-${booking.payment.status.toLowerCase()}`}>
+                      {booking.payment.status === 'SUCCESS' ? '✅ Payment Successful' : 
+                       booking.payment.status === 'PENDING' ? '⏳ Payment Pending' : 
+                       '❌ Payment Failed'}
+                    </span>
+                  </div>
+                  {booking.payment.transaction_id && (
+                    <div className="detail-row payment-section">
+                      <span className="label">🔐 Transaction ID:</span>
+                      <span className="value transaction-id">{booking.payment.transaction_id}</span>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Carwash Service Details */}
               {booking.carwash ? (
@@ -446,6 +533,21 @@ const BookingConfirmation = () => {
           </div>
         )}
       </div>
+
+      {/* Renewal Payment Modal */}
+      {showRenewalPaymentModal && booking && (
+        <PaymentModal
+          slot={{ 
+            slotNumber: booking.slot_read?.slot_id,
+            lot_detail: booking.lot_detail,
+            vehicle_type: booking.vehicle_type 
+          }}
+          price={booking.price}
+          onConfirm={handleRenewalPaymentConfirm}
+          onClose={handleRenewalPaymentCancel}
+          isLoading={isRenewing}
+        />
+      )}
     </div>
   );
 };

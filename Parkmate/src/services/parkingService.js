@@ -114,8 +114,8 @@ const parkingService = {
     return response.data;
   },
 
-  renewBooking: async (id) => {
-    const response = await api.post(`/bookings/${id}/renew/`);
+  renewBooking: async (id, paymentData) => {
+    const response = await api.post(`/bookings/${id}/renew/`, paymentData || {});
     return response.data;
   },
 

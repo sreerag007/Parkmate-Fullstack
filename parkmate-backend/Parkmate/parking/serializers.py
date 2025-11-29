@@ -336,6 +336,7 @@ class BookingSerializer(serializers.ModelSerializer):
     is_expired = serializers.SerializerMethodField()
     remaining_time = serializers.SerializerMethodField()
     carwash = serializers.SerializerMethodField()
+    payment = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -357,9 +358,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "is_expired",
             "remaining_time",
             "carwash",
+            "payment",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment"]
 
     def get_lot_detail(self, obj):
         """Get lot details from the slot"""
@@ -367,6 +369,15 @@ class BookingSerializer(serializers.ModelSerializer):
             serializer = PLotNestedSerializer(obj.slot.lot)
             return serializer.data
         return None
+
+    def get_payment(self, obj):
+        """Get payment details if exists"""
+        try:
+            payment = obj.payment
+            return PaymentSerializer(payment).data
+        except:
+            return None
+
 
     def get_is_expired(self, obj):
         """Check if booking has expired"""
@@ -443,9 +454,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.all())
     booking_read = PaymentBookingNestedSerializer(source="booking", read_only=True)
     payment_method = serializers.ChoiceField(choices=PAYMENT_CHOICES)
+    status = serializers.ChoiceField(choices=Payment.PAYMENT_STATUS_CHOICES)
 
-    # user=PaymentUserNestedSerializer(read_only=True)
-    # user_id=serializers.PrimaryKeyRelatedField(queryset=UserProfile.objects.all(),write_only=True)
     class Meta:
         model = Payment
         fields = [
@@ -455,8 +465,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             "user",
             "payment_method",
             "amount",
+            "status",
+            "transaction_id",
+            "created_at",
         ]
-        read_only_fields = ["pay_id", "amount","user"]
+        read_only_fields = ["pay_id", "user", "created_at"]
+
 
 
 # Services Serializer
