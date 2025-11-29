@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import(
     AuthViewSet,UserProfileViewSet,OwnerProfileViewSet,P_LotVIewSet,P_SlotViewSet,BookingViewSet,
     PaymentViewSet,TasksViewSet,CarwashViewSet,CarwashTypeViewSet,
-    EmployeeViewSet,ReviewViewSet, ###
+    EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView, ###
 )
 
 router=DefaultRouter()
@@ -32,5 +32,7 @@ urlpatterns = [
     path('auth/register-owner/', auth_register_owner, name='auth-register-owner'),
     path('auth/login/',auth_login, name='auth-login'),
     path('auth/logout/', auth_logout, name='auth-logout'),
-    path('auth/verify/', auth_verify, name='auth-verify')
+    path('auth/verify/', auth_verify, name='auth-verify'),
+    
+    path('owner/payments/<str:payment_id>/verify/', VerifyCashPaymentView.as_view(), name='verify-cash-payment'),
 ]

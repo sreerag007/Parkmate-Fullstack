@@ -5,7 +5,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.authtoken.models import Token
 from rest_framework import status
 from rest_framework import serializers
+from rest_framework.views import APIView
 from django.contrib.auth import logout, authenticate
+from django.utils import timezone
 from rest_framework.parsers import MultiPartParser, FormParser,JSONParser
 from rest_framework.decorators import action
 
@@ -426,7 +428,7 @@ class BookingViewSet(ModelViewSet):
             booking.save()
 
     def retrieve(self, request, *args, **kwargs):
-        """Override retrieve to auto-complete expired bookings"""
+        """Override retrieve to auto-complete expired bookings and check payment status"""
         response = super().retrieve(request, *args, **kwargs)
         booking_id = kwargs.get('pk')
         try:
@@ -447,6 +449,20 @@ class BookingViewSet(ModelViewSet):
             print(f"   Start time: {booking.start_time}")
             print(f"   End time: {booking.end_time}")
             print(f"   Current time: {now}")
+            
+            # ✅ CHECK FOR PENDING CASH PAYMENT
+            first_payment = booking.payments.order_by('created_at').first()
+            if first_payment and first_payment.status == 'PENDING':
+                print(f"   ⏳ Payment pending verification (status: PENDING)")
+                response.data['payment_status'] = 'PENDING'
+                response.data['payment_id'] = first_payment.pay_id
+                response.data['timer_active'] = False  # Timer should not start
+            elif first_payment:
+                print(f"   ✅ Payment verified (status: {first_payment.status})")
+                response.data['payment_status'] = first_payment.status
+                response.data['payment_id'] = first_payment.pay_id
+                response.data['timer_active'] = True  # Timer can start
+            
             if booking.end_time:
                 time_diff = booking.end_time - now
                 print(f"   Time remaining: {time_diff.total_seconds()} seconds")
@@ -1025,11 +1041,15 @@ class CarwashViewSet(ModelViewSet):
                     print(f"🔍 Employee found: {employee}")
                     
                     if employee:
+                        # Set carwash status based on payment status
+                        carwash_status = 'pending' if payment_status == 'PENDING' else 'active'
+                        
                         carwash = Carwash.objects.create(
                             booking=booking,
                             carwash_type=carwash_type,
                             employee=employee,
-                            price=amount
+                            price=amount,
+                            status=carwash_status
                         )
                         print(f"✅ Car Wash booking created: {carwash.carwash_id}")
                         print(f"   - Service: {carwash_type.name}")
@@ -1179,4 +1199,140 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user_profile=UserProfile.objects.get(auth_user=self.request.user)
         serializer.save(user=user_profile)                             
+
+
+class VerifyCashPaymentView(APIView):
+    """
+    Endpoint to verify cash payment and activate booking/carwash service.
+    Only parking lot owners can verify payments for their lots.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, payment_id):
+        """
+        Verify a cash payment and activate associated booking/carwash service.
+        
+        Payload:
+        {
+            "verified": true
+        }
+        
+        Returns:
+        {
+            "message": "Payment verified successfully",
+            "payment_id": "...",
+            "booking_id": "...",
+            "carwash_id": "..." (if applicable)
+        }
+        """
+        try:
+            user = request.user
+            
+            print(f"🔍 Verification request from user: {user.username} (id={user.id})")
+            print(f"   Role: {getattr(user, 'role', 'unknown')}")
+            
+            # Get the payment
+            try:
+                payment = Payment.objects.get(pay_id=payment_id)
+            except Payment.DoesNotExist:
+                return Response(
+                    {'error': 'Payment not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            print(f"📋 Payment found: {payment.pay_id}")
+            
+            # Check if payment is already verified
+            if payment.status == 'SUCCESS':
+                return Response(
+                    {'message': 'Payment is already verified ✓', 'payment_id': payment.pay_id},
+                    status=status.HTTP_200_OK
+                )
+            
+            # Check if payment is cash and pending
+            if payment.payment_method != 'Cash' or payment.status != 'PENDING':
+                return Response(
+                    {'error': 'Only pending cash payments can be verified'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check permission: user must be owner of the parking lot
+            booking = payment.booking
+            lot_owner = booking.lot.owner
+            
+            print(f"🔐 Lot owner: {lot_owner} (id={lot_owner.id})")
+            
+            try:
+                current_owner = OwnerProfile.objects.get(auth_user=user)
+                print(f"✓ Found owner profile for user: {current_owner}")
+            except OwnerProfile.DoesNotExist:
+                print(f"❌ User {user.username} is not an owner")
+                return Response(
+                    {'error': 'Only parking lot owners can verify payments'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            if current_owner != lot_owner:
+                print(f"❌ Owner mismatch: {current_owner.id} != {lot_owner.id}")
+                return Response(
+                    {'error': 'You do not have permission to verify this payment'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            print(f"✅ Verifying cash payment: {payment.pay_id}")
+            print(f"   - Booking: {booking.booking_id}")
+            print(f"   - Amount: ₹{payment.amount}")
+            
+            # Update payment status to SUCCESS
+            payment.status = 'SUCCESS'
+            payment.verified_by = user
+            payment.verified_at = timezone.now()
+            payment.save()
+            
+            print(f"✅ Payment status updated to SUCCESS")
+            
+            # If this is a slot payment (first payment), update booking status
+            payment_order = Payment.objects.filter(
+                booking=booking,
+                created_at__lte=payment.created_at
+            ).count()
+            
+            if payment_order == 1:  # First payment = slot payment
+                booking.status = 'booked'
+                booking.save()
+                print(f"✅ Booking status updated to 'booked'")
+            
+            # Find and activate any pending carwash service associated with this booking
+            carwash_id = None
+            carwash_payments = Payment.objects.filter(
+                booking=booking,
+                status='SUCCESS'
+            ).exclude(pay_id=payment.pay_id)
+            
+            if carwash_payments.exists():
+                # There are other successful payments, likely carwash
+                carwash = Carwash.objects.filter(booking=booking).first()
+                if carwash:
+                    carwash.status = 'active'
+                    carwash.save()
+                    carwash_id = carwash.carwash_id
+                    print(f"✅ Carwash service activated: {carwash_id}")
+            
+            return Response({
+                'message': '✓ Payment verified successfully. Booking activated!',
+                'payment_id': payment.pay_id,
+                'booking_id': booking.booking_id,
+                'carwash_id': carwash_id,
+                'verified_at': payment.verified_at
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"❌ Error verifying cash payment: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 

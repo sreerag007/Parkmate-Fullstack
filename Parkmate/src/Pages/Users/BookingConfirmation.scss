@@ -156,6 +156,33 @@
               }
             }
 
+            &.pending-payment {
+              background: linear-gradient(135deg, #fefce8 0%, #fef08a 100%);
+              border-color: #f59e0b;
+
+              .timer-card-label {
+                color: #92400e;
+              }
+
+              .timer-card-time {
+                color: #b45309;
+                font-size: 24px;
+              }
+
+              .timer-card-desc {
+                color: #92400e;
+                font-size: 13px;
+                line-height: 1.5;
+              }
+
+              .timer-card-action {
+                font-size: 11px;
+                color: #78350f;
+                margin: 8px 0 0 0;
+                opacity: 0.8;
+              }
+            }
+
             .timer-card-label {
               font-size: 13px;
               font-weight: 700;

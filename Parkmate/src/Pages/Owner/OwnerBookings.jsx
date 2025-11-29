@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
+import { toast } from 'react-toastify'
 import './Owner.scss'
 
 const OwnerBookings = () => {
@@ -9,6 +10,8 @@ const OwnerBookings = () => {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [filter, setFilter] = useState('all') // all, booked, completed, cancelled
+    const [pendingPayments, setPendingPayments] = useState([])
+    const [verifyingPayment, setVerifyingPayment] = useState(null)
     const refreshIntervalRef = useRef(null)
 
     // Load bookings from backend
@@ -22,6 +25,28 @@ const OwnerBookings = () => {
             console.log('✅ Bookings loaded:', bookingsData)
 
             setBookings(bookingsData)
+            
+            // Extract pending cash payments - ONLY from owner's lots
+            const pending = []
+            bookingsData.forEach(booking => {
+                // Ensure booking belongs to this owner's lot
+                if (booking.lot_detail && booking.payments && Array.isArray(booking.payments)) {
+                    booking.payments.forEach(payment => {
+                        if (payment.status === 'PENDING' && payment.payment_method === 'Cash') {
+                            pending.push({
+                                ...payment,
+                                booking_id: booking.booking_id,
+                                user_name: booking.user_name || booking.username,
+                                lot_name: booking.lot_detail?.lot_name,
+                                slot_id: booking.slot_read?.slot_id,
+                                lot_id: booking.lot_detail?.lot_id
+                            })
+                        }
+                    })
+                }
+            })
+            setPendingPayments(pending)
+            console.log(`✅ Found ${pending.length} pending cash payments for owner's lots`)
         } catch (err) {
             console.error('❌ Error loading bookings:', err)
             setError('Failed to load bookings')
@@ -78,6 +103,27 @@ const OwnerBookings = () => {
         }
     }
 
+    const handleVerifyPayment = async (paymentId) => {
+        try {
+            setVerifyingPayment(paymentId)
+            console.log('✅ Verifying payment:', paymentId)
+            
+            const response = await parkingService.verifyPayment(paymentId)
+            console.log('✅ Payment verified:', response)
+            
+            // Reload bookings to update payment status
+            await loadBookings()
+            
+            toast.success('✓ Payment verified successfully! Booking activated.')
+        } catch (err) {
+            console.error('❌ Error verifying payment:', err)
+            const errorMsg = err.response?.data?.error || err.message || 'Failed to verify payment'
+            toast.error('❌ ' + errorMsg)
+        } finally {
+            setVerifyingPayment(null)
+        }
+    }
+
     if (loading) {
         return (
             <div className="owner-bookings">
@@ -126,6 +172,92 @@ const OwnerBookings = () => {
                     </button>
                 </div>
             </header>
+
+            {/* Pending Payments Section */}
+            {pendingPayments.length > 0 && (
+                <div style={{
+                    background: '#fefce8',
+                    border: '2px solid #f59e0b',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '20px' }}>⏳</span>
+                        <h3 style={{ margin: 0, color: '#92400e', fontSize: '18px', fontWeight: '600' }}>
+                            {pendingPayments.length} Pending Cash Payment{pendingPayments.length > 1 ? 's' : ''}
+                        </h3>
+                    </div>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                        gap: '12px'
+                    }}>
+                        {pendingPayments.map(payment => (
+                            <div key={payment.pay_id} style={{
+                                background: '#fff',
+                                border: '1px solid #fed7aa',
+                                borderRadius: '8px',
+                                padding: '14px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '10px'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                    <div>
+                                        <p style={{ margin: 0, fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>
+                                            {payment.user_name}
+                                        </p>
+                                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                                            Lot: {payment.lot_name} • Slot: #{payment.slot_id}
+                                        </p>
+                                    </div>
+                                    <div style={{
+                                        padding: '4px 8px',
+                                        background: '#fef3c7',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        color: '#92400e'
+                                    }}>
+                                        ₹{parseFloat(payment.amount).toFixed(2)}
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                    ID: {payment.transaction_id}
+                                </div>
+                                <button
+                                    onClick={() => handleVerifyPayment(payment.pay_id)}
+                                    disabled={verifyingPayment === payment.pay_id}
+                                    style={{
+                                        padding: '8px 12px',
+                                        background: '#10b981',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: verifyingPayment === payment.pay_id ? 'not-allowed' : 'pointer',
+                                        fontWeight: '600',
+                                        fontSize: '13px',
+                                        transition: 'all 0.2s',
+                                        opacity: verifyingPayment === payment.pay_id ? 0.6 : 1
+                                    }}
+                                    onMouseOver={(e) => {
+                                        if (verifyingPayment !== payment.pay_id) {
+                                            e.target.style.background = '#059669'
+                                        }
+                                    }}
+                                    onMouseOut={(e) => e.target.style.background = '#10b981'}
+                                >
+                                    {verifyingPayment === payment.pay_id ? '⏳ Verifying...' : '✓ Verify Payment'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button 

@@ -130,6 +130,11 @@ const parkingService = {
     return response.data;
   },
 
+  verifyPayment: async (paymentId) => {
+    const response = await api.post(`/owner/payments/${paymentId}/verify/`, { verified: true });
+    return response.data;
+  },
+
   // ===== REVIEWS =====
   getReviews: async (lotId = null) => {
     const url = lotId ? `/reviews/?lot=${lotId}` : '/reviews/';

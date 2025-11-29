@@ -111,6 +111,13 @@ const BookingConfirmation = () => {
     const status = booking?.status?.toUpperCase() || '';
     if (!booking || (status !== 'ACTIVE' && status !== 'BOOKED')) return;
 
+    // ✅ CHECK IF PAYMENT IS STILL PENDING - Don't start timer if payment not verified
+    if (booking.payment_status === 'PENDING') {
+      console.log(`⏳ Payment pending verification - timer will not start`);
+      setTimeLeft(null);
+      return; // Don't start timer for pending payments
+    }
+
     console.log(`⏱️ BookingConfirmation timer started for booking ${booking.booking_id} (status=${status})`);
     console.log(`   End time: ${booking.end_time}`);
 
@@ -145,7 +152,7 @@ const BookingConfirmation = () => {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [booking?.end_time, booking?.status]);
+  }, [booking?.end_time, booking?.status, booking?.payment_status]);
 
   // Poll backend every 10 seconds to check if booking was auto-completed
   useEffect(() => {
@@ -354,29 +361,42 @@ const BookingConfirmation = () => {
                     </div>
                   )}
 
-                  {/* Timer Card */}
-                  <div className={`timer-card ${isExpiringSoon ? 'expiring' : ''}`}>
-                    {booking.status.toUpperCase() === 'SCHEDULED' ? (
-                      <>
-                        <h4 className="timer-card-label">⏰ Scheduled</h4>
-                        <p className="timer-card-time">
-                          {new Date(booking.start_time).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                        <p className="timer-card-desc">Activates at this time</p>
-                      </>
-                    ) : (
-                      <>
-                        <h4 className="timer-card-label">⏱️ Time Remaining</h4>
-                        <p className="timer-card-time">{formatTime(timeLeft)}</p>
-                        {isExpiringSoon && (
-                          <p className="timer-card-warning">⚠️ Expiring soon!</p>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {/* Timer Card - Or Pending Payment Message */}
+                  {booking.payment_status === 'PENDING' ? (
+                    <div className="timer-card pending-payment">
+                      <h4 className="timer-card-label">⏳ Pending Verification</h4>
+                      <p className="timer-card-time">Payment Awaiting Confirmation</p>
+                      <p className="timer-card-desc">
+                        Your cash payment will be verified at the parking counter. Once verified, your booking will be activated and the timer will start.
+                      </p>
+                      <p className="timer-card-action">
+                        Transaction ID: {booking.payment_id}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className={`timer-card ${isExpiringSoon ? 'expiring' : ''}`}>
+                      {booking.status.toUpperCase() === 'SCHEDULED' ? (
+                        <>
+                          <h4 className="timer-card-label">⏰ Scheduled</h4>
+                          <p className="timer-card-time">
+                            {new Date(booking.start_time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                          <p className="timer-card-desc">Activates at this time</p>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="timer-card-label">⏱️ Time Remaining</h4>
+                          <p className="timer-card-time">{formatTime(timeLeft)}</p>
+                          {isExpiringSoon && (
+                            <p className="timer-card-warning">⚠️ Expiring soon!</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
