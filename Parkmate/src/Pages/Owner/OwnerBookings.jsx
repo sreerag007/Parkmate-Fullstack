@@ -36,7 +36,9 @@ const OwnerBookings = () => {
                             pending.push({
                                 ...payment,
                                 booking_id: booking.booking_id,
-                                user_name: booking.user_name || booking.username,
+                                user_name: booking.user_read?.firstname && booking.user_read?.lastname 
+                                    ? `${booking.user_read.firstname} ${booking.user_read.lastname}` 
+                                    : 'User',
                                 lot_name: booking.lot_detail?.lot_name,
                                 slot_id: booking.slot_read?.slot_id,
                                 lot_id: booking.lot_detail?.lot_id
@@ -362,8 +364,12 @@ const OwnerBookings = () => {
                                 {sortedBookings.map((b) => (
                                     <tr key={b.booking_id} style={{ borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.background = '#fff'}>
                                         <td style={{ padding: '16px' }}>
-                                            <div style={{ fontWeight: '600', color: '#0f172a' }}>{b.user_name || b.username || 'User'}</div>
-                                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ID: {b.user_id}</div>
+                                            <div style={{ fontWeight: '600', color: '#0f172a' }}>
+                                                {b.user_read?.firstname && b.user_read?.lastname 
+                                                    ? `${b.user_read.firstname} ${b.user_read.lastname}` 
+                                                    : b.user_name || b.username || 'User'}
+                                            </div>
+                                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ID: {b.user}</div>
                                         </td>
                                         <td style={{ padding: '16px', color: '#0f172a' }}>
                                             {b.lot_detail?.lot_name || 'Unknown Lot'}
