@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
-import { toast } from 'react-toastify'
+import { notify } from '../../utils/notify.jsx'
 import './Owner.scss'
 
 const fontStyles = {
@@ -100,7 +100,7 @@ const OwnerPayments = () => {
         } catch (err) {
             console.error('❌ Error loading payments:', err)
             setError('Failed to load payments')
-            toast.error('❌ Failed to load payments')
+            notify.error('Unable to load payment data.')
         } finally {
             setLoading(false)
         }

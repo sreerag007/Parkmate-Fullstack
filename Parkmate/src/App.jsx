@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import { AuthProvider } from './Context/AuthContext'
 import ProtectedRoute from './Components/ProtectedRoute'
 import UserLand from './Pages/Users/Userland'
@@ -37,6 +39,18 @@ function App() {
       <DataProvider>
         <BrowserRouter>
           <Navbar />
+          
+          {/* Global Toast Notification Container */}
+          <ToastContainer
+            position="top-right"
+            autoClose={4000}
+            hideProgressBar={false}
+            newestOnTop={true}
+            closeOnClick
+            pauseOnHover
+            draggable
+            theme="colored"
+          />
 
           <div className="app-content">
             <div className="container">

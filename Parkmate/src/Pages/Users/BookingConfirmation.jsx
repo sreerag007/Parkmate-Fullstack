@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import parkingService from '../../services/parkingService';
+import { notify } from '../../utils/notify.jsx';
 import PaymentModal from '../../Components/PaymentModal';
 import './BookingConfirmation.scss';
 
@@ -168,6 +169,11 @@ const BookingConfirmation = () => {
   }, [bookingId, isExpired, pollBooking]);
 
   const handleRenewClick = () => {
+    // Only allow renewal when booking has completely expired
+    if (!isExpired) {
+      notify.warning('Booking must completely expire before renewal. Please wait.');
+      return;
+    }
     // Show payment modal for renewal
     setShowRenewalPaymentModal(true);
   };
@@ -180,6 +186,7 @@ const BookingConfirmation = () => {
       setRenewError(null);
       setShowRenewalPaymentModal(false);
       
+      notify.info('Processing renewal...');
       console.log('💳 Renewing booking with payment:', paymentData);
       const result = await parkingService.renewBooking(bookingId, {
         payment_method: paymentData.payment_method,
@@ -198,12 +205,15 @@ const BookingConfirmation = () => {
         setIsExpired(false);
         setTimeLeft(null);
         
+        notify.success(`Booking renewed! Your new booking ID is ${newBookingId}`);
+        
         // Navigate with replace to prevent back button issues
         setTimeout(() => {
           navigate(`/booking-confirmation?booking=${newBookingId}`, { replace: true });
-        }, 100);
+        }, 1500);
       } else {
         setRenewError('Renewal succeeded but could not get new booking ID');
+        notify.error('Could not get new booking ID. Please refresh the page.');
       }
     } catch (err) {
       console.error('❌ Error renewing booking:', err);
@@ -214,6 +224,7 @@ const BookingConfirmation = () => {
         message: errorMsg
       });
       setRenewError(errorMsg);
+      notify.error(errorMsg);
     } finally {
       setIsRenewing(false);
     }
@@ -230,6 +241,7 @@ const BookingConfirmation = () => {
       setIsRenewing(true);
       setRenewError(null);
       setShowRenewConfirm(false);
+      notify.info('Processing renewal...');
       const result = await parkingService.renewBooking(bookingId);
       console.log('✅ Booking renewed:', result);
       
@@ -244,12 +256,15 @@ const BookingConfirmation = () => {
         setIsExpired(false);
         setTimeLeft(null);
         
+        notify.success(`Booking renewed! Your new booking ID is ${newBookingId}`);
+        
         // Navigate with replace to prevent back button issues
         setTimeout(() => {
           navigate(`/booking-confirmation?booking=${newBookingId}`, { replace: true });
-        }, 100);
+        }, 1500);
       } else {
         setRenewError('Renewal succeeded but could not get new booking ID');
+        notify.error('Could not get new booking ID. Please refresh the page.');
       }
     } catch (err) {
       console.error('❌ Error renewing booking:', err);
@@ -260,6 +275,7 @@ const BookingConfirmation = () => {
         message: errorMsg
       });
       setRenewError(errorMsg);
+      notify.error(errorMsg);
     } finally {
       setIsRenewing(false);
     }
@@ -497,14 +513,14 @@ const BookingConfirmation = () => {
                 🚗 Add Car Wash Service
               </button>
               {isExpiringSoon && (
-                <button
-                  className="btn warning"
-                  onClick={handleRenewClick}
-                  disabled={isRenewing}
-                  title="Your booking is expiring soon. Click to renew for another hour."
-                >
-                  {isRenewing ? '🔄 Renewing...' : '🔄 Renew Now'}
-                </button>
+                <div className="expiring-warning">
+                  <p style={{ color: '#f59e0b', fontWeight: '500', margin: 0 }}>
+                    ⏰ Your booking will expire in {formatTime(timeLeft)}
+                  </p>
+                  <p style={{ color: '#6b7280', fontSize: '0.9rem', margin: '4px 0 0 0' }}>
+                    You can renew it once it completely expires.
+                  </p>
+                </div>
               )}
               <button className="btn ghost" onClick={handleExit}>
                 🏠 Return to Home

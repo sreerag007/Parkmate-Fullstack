@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
-import { toast } from 'react-toastify'
+import { notify } from '../../utils/notify.jsx'
 import './Owner.scss'
 
 const OwnerBookings = () => {
@@ -114,11 +114,11 @@ const OwnerBookings = () => {
             // Reload bookings to update payment status
             await loadBookings()
             
-            toast.success('✓ Payment verified successfully! Booking activated.')
+            notify.success('Cash payment verified successfully! Booking activated.')
         } catch (err) {
             console.error('❌ Error verifying payment:', err)
             const errorMsg = err.response?.data?.error || err.message || 'Failed to verify payment'
-            toast.error('❌ ' + errorMsg)
+            notify.error(errorMsg)
         } finally {
             setVerifyingPayment(null)
         }
