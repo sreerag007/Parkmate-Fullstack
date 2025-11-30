@@ -22,10 +22,23 @@ export const useWebSocketNotifications = (userId) => {
 
     const connectWebSocket = () => {
       try {
-        // Use hardcoded WebSocket URL or fallback to current host
-        const wsUrl = `ws://127.0.0.1:8000/ws/notifications/${userId}/`;
+        // Determine the correct backend URL
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const hostname = window.location.hostname || 'localhost';
+        
+        // In development: connect to backend on port 8000
+        // In production: connect to same host/port as frontend
+        const backendPort = process.env.NODE_ENV === 'production' 
+          ? (window.location.port || (window.location.protocol === 'https:' ? 443 : 80))
+          : 8000;
+        
+        const wsUrl = `${protocol}//${hostname}:${backendPort}/ws/notifications/${userId}/`;
 
-        console.log(`🔌 Connecting to WebSocket: ${wsUrl}`);
+        console.log(`🔌 Connecting to WebSocket`);
+        console.log(`   URL: ${wsUrl}`);
+        console.log(`   Environment: ${process.env.NODE_ENV}`);
+        console.log(`   Frontend: ${window.location.host}`);
+        console.log(`   Backend: ${hostname}:${backendPort}`);
 
         socketRef.current = new WebSocket(wsUrl);
 

@@ -10,7 +10,8 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 import os
 import logging
 from django.core.asgi import get_asgi_application
-from channels.routing import URLRouter
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
 from parking.routing import websocket_urlpatterns
 
 # Setup logging
@@ -20,32 +21,15 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Parkmate.settings')
 
 django_asgi_app = get_asgi_application()
 
-# ASGI application that properly routes HTTP and WebSocket requests
-async def application(scope, receive, send):
-    """
-    Main ASGI application entry point.
-    Routes requests to appropriate handlers based on protocol type.
-    """
-    if scope['type'] == 'websocket':
-        # Route WebSocket connections to the WebSocket handler
-        router = URLRouter(websocket_urlpatterns)
-        await router(scope, receive, send)
-    elif scope['type'] == 'http':
-        # Route HTTP requests through Django
-        await django_asgi_app(scope, receive, send)
-    elif scope['type'] == 'lifespan':
-        # Handle lifespan events
-        await django_asgi_app(scope, receive, send)
-    else:
-        # Unknown scope type
-        await send({
-            'type': 'http.response.start',
-            'status': 400,
-            'headers': [[b'content-type', b'text/plain']],
-        })
-        await send({
-            'type': 'http.response.body',
-            'body': b'Unknown request type',
-        })
+# ASGI application using Channels ProtocolTypeRouter (recommended approach)
+application = ProtocolTypeRouter({
+    'http': django_asgi_app,
+    'websocket': AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns
+        )
+    ),
+    'lifespan': django_asgi_app,
+})
 
 

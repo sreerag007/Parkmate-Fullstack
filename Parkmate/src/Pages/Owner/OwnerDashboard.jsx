@@ -38,17 +38,34 @@ const OwnerDashboard = () => {
                 const lotsData = await parkingService.getLots()
                 console.log('✅ Lots fetched:', lotsData)
 
-                // Calculate statistics
-                const activeBookings = bookingsData.filter(b => {
+                // Filter to only owner's lots
+                const ownerLotIds = lotsData.map(lot => lot.lot_id)
+                console.log('🏢 Owner lot IDs:', ownerLotIds)
+
+                // Filter bookings to only those from owner's lots
+                const ownerBookings = bookingsData.filter(b => {
+                    const lotId = b.lot_detail?.lot_id || b.lot
+                    return ownerLotIds.includes(lotId)
+                })
+                console.log('📋 Owner bookings count:', ownerBookings.length)
+
+                // Calculate statistics (ONLY from owner's data)
+                const activeBookings = ownerBookings.filter(b => {
                   const s = b.status?.toLowerCase() || ''
                   return s === 'booked' || s === 'active' || s === 'scheduled'
                 }).length
                 console.log('📊 Active bookings count:', activeBookings)
                 
-                const totalRevenue = bookingsData.reduce((sum, b) => sum + parseFloat(b.price || 0), 0)
+                // Calculate revenue (ONLY from owner's bookings AND verified payments)
+                const totalRevenue = ownerBookings.reduce((sum, b) => {
+                    // Sum all verified payments for this booking
+                    const bookingPayments = b.payments?.filter(p => p.status === 'VERIFIED') || []
+                    const bookingRevenue = bookingPayments.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0)
+                    return sum + bookingRevenue
+                }, 0)
                 console.log('💰 Total revenue:', totalRevenue)
 
-                // Calculate occupancy
+                // Calculate occupancy (ONLY from owner's lots)
                 let totalSlots = 0
                 let occupiedSlots = 0
                 
@@ -61,12 +78,12 @@ const OwnerDashboard = () => {
                 const occupancyRate = totalSlots > 0 ? Math.round((occupiedSlots / totalSlots) * 100) : 0
                 console.log('📊 Occupancy rate:', occupancyRate, `(${occupiedSlots}/${totalSlots})`)
 
-                // Create recent activity from bookings
-                const recentActivity = bookingsData.slice(0, 5).map((booking, idx) => ({
+                // Create recent activity from OWNER'S bookings only
+                const recentActivity = ownerBookings.slice(0, 5).map((booking, idx) => ({
                     id: booking.booking_id,
                     text: `Booking #${booking.booking_id} - ${booking.status}`,
                     time: new Date(booking.booking_time).toLocaleDateString(),
-                    status: booking.status === 'Booked' ? 'green' : booking.status === 'Completed' ? 'blue' : 'yellow'
+                    status: booking.status?.toLowerCase() === 'booked' ? 'green' : booking.status?.toLowerCase() === 'completed' ? 'blue' : 'yellow'
                 }))
 
                 console.log('✨ Dashboard data ready to display')

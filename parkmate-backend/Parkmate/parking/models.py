@@ -134,7 +134,7 @@ class P_Slot(models.Model):
     slot_id=models.AutoField(primary_key=True)
     lot=models.ForeignKey(to=P_Lot,on_delete=models.CASCADE,db_column='lot_id',related_name='slots')
     vehicle_type=models.CharField(max_length=100,choices=VEHICLE_CHOICES)  
-    price=models.DecimalField(max_digits=5,decimal_places=2,help_text="The hourly rate of specific Slot",default=0.00)
+    price=models.DecimalField(max_digits=5,decimal_places=2,help_text="The hourly rate of specific Slot",default=50.00)
     is_available=models.BooleanField(default=True,help_text="True if the slot is free, false if booked")
 
 
