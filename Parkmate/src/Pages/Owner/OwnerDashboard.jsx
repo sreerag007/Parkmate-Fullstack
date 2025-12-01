@@ -38,6 +38,12 @@ const OwnerDashboard = () => {
                 const lotsData = await parkingService.getLots()
                 console.log('✅ Lots fetched:', lotsData)
 
+                // Fetch payments for accurate revenue calculation
+                console.log('📡 Fetching owner payments...')
+                const paymentsResponse = await parkingService.getOwnerPayments()
+                const paymentsData = paymentsResponse.results || paymentsResponse || []
+                console.log('✅ Payments fetched:', paymentsData)
+
                 // Filter to only owner's lots
                 const ownerLotIds = lotsData.map(lot => lot.lot_id)
                 console.log('🏢 Owner lot IDs:', ownerLotIds)
@@ -56,14 +62,10 @@ const OwnerDashboard = () => {
                 }).length
                 console.log('📊 Active bookings count:', activeBookings)
                 
-                // Calculate revenue (ONLY from owner's bookings AND verified payments)
-                const totalRevenue = ownerBookings.reduce((sum, b) => {
-                    // Sum all verified payments for this booking
-                    const bookingPayments = b.payments?.filter(p => p.status === 'VERIFIED') || []
-                    const bookingRevenue = bookingPayments.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0)
-                    return sum + bookingRevenue
-                }, 0)
-                console.log('💰 Total revenue:', totalRevenue)
+                // Calculate revenue from successful payments (same as OwnerPayments section)
+                const successPayments = paymentsData.filter(p => p.status === 'SUCCESS')
+                const totalRevenue = successPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+                console.log('💰 Total revenue from payments:', totalRevenue)
 
                 // Calculate occupancy (ONLY from owner's lots)
                 let totalSlots = 0
