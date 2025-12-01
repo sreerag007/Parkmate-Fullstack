@@ -26,11 +26,17 @@ const Reviews = () => {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('add')
   const [reviews, setReviews] = useState([])
+  const [allReviews, setAllReviews] = useState([])
   const [bookedLots, setBookedLots] = useState([])
+  const [allLots, setAllLots] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [filterLotAll, setFilterLotAll] = useState('')
+  const [filterRatingAll, setFilterRatingAll] = useState('')
+  const [selectedReviewModal, setSelectedReviewModal] = useState(null)
+  const [showReviewModal, setShowReviewModal] = useState(false)
 
   const [formData, setFormData] = useState({
     lot: '',
@@ -49,6 +55,8 @@ const Reviews = () => {
     if (user) {
       fetchReviews()
       fetchBookedLots()
+      fetchAllLots()
+      fetchAllReviews()
     }
   }, [user])
 
@@ -80,6 +88,40 @@ const Reviews = () => {
     } catch (error) {
       console.error('Error fetching booked lots:', error)
     }
+  }
+
+  const fetchAllLots = async () => {
+    try {
+      const response = await api.get('/lots/')
+      setAllLots(response.data)
+    } catch (error) {
+      console.error('Error fetching all lots:', error)
+    }
+  }
+
+  const fetchAllReviews = async () => {
+    try {
+      const response = await api.get('/reviews/')
+      setAllReviews(response.data)
+    } catch (error) {
+      console.error('Error fetching all reviews:', error)
+      toast.error('Failed to load community reviews')
+    }
+  }
+
+  const getFilteredAllReviews = () => {
+    return allReviews.filter((review) => {
+      const lotMatch = !filterLotAll || review.lot_detail?.lot_id === parseInt(filterLotAll)
+      const ratingMatch = !filterRatingAll || review.rating === parseInt(filterRatingAll)
+      return lotMatch && ratingMatch
+    })
+  }
+
+  const getAverageRating = (lotId) => {
+    const lotReviews = allReviews.filter((r) => r.lot_detail?.lot_id === lotId)
+    if (lotReviews.length === 0) return 0
+    const sum = lotReviews.reduce((acc, r) => acc + r.rating, 0)
+    return (sum / lotReviews.length).toFixed(1)
   }
 
   const handleAddReview = async (e) => {
@@ -215,6 +257,12 @@ const Reviews = () => {
         >
           💬 My Reviews ({reviews.length})
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'all-reviews' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all-reviews')}
+        >
+          🌍 Community Reviews ({allReviews.length})
+        </button>
       </div>
 
       {/* Add Review Tab */}
@@ -334,6 +382,182 @@ const Reviews = () => {
               <p>📝 You haven't written any reviews yet. Share your experience!</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* All Reviews Tab */}
+      {activeTab === 'all-reviews' && (
+        <div className="tab-content">
+          <div className="all-reviews-section">
+            {/* Filters */}
+            <div className="filters-section">
+              <div className="filter-group">
+                <label htmlFor="filter-lot-all">Filter by Lot</label>
+                <select
+                  id="filter-lot-all"
+                  value={filterLotAll}
+                  onChange={(e) => setFilterLotAll(e.target.value)}
+                  className="form-control"
+                >
+                  <option value="">All Lots</option>
+                  {allLots.map((lot) => (
+                    <option key={lot.lot_id} value={lot.lot_id}>
+                      {lot.lot_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="filter-rating-all">Filter by Rating</label>
+                <select
+                  id="filter-rating-all"
+                  value={filterRatingAll}
+                  onChange={(e) => setFilterRatingAll(e.target.value)}
+                  className="form-control"
+                >
+                  <option value="">All Ratings</option>
+                  <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
+                  <option value="4">⭐⭐⭐⭐ 4 Stars</option>
+                  <option value="3">⭐⭐⭐ 3 Stars</option>
+                  <option value="2">⭐⭐ 2 Stars</option>
+                  <option value="1">⭐ 1 Star</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Reviews List */}
+            {getFilteredAllReviews().length > 0 ? (
+              <div className="all-reviews-list">
+                {getFilteredAllReviews().map((review) => (
+                  <div key={review.rev_id} className="review-card-all">
+                    <div className="review-header-all">
+                      <div>
+                        <span className="rating-stars">
+                          {'⭐'.repeat(review.rating)}
+                        </span>
+                        <span className="rating-text">{review.rating}/5</span>
+                      </div>
+                      <span className="lot-name-badge">
+                        {review.lot_detail?.lot_name}
+                      </span>
+                    </div>
+
+                    <div className="review-meta-all">
+                      <span className="reviewer">
+                        by {review.user_detail?.firstname} {review.user_detail?.lastname}
+                      </span>
+                      <span className="review-date">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <p className="review-text-all">
+                      {review.review_desc.length > 150
+                        ? review.review_desc.substring(0, 150) + '...'
+                        : review.review_desc}
+                    </p>
+
+                    {review.review_desc.length > 150 && (
+                      <button
+                        className="btn-read-more"
+                        onClick={() => {
+                          setSelectedReviewModal(review)
+                          setShowReviewModal(true)
+                        }}
+                      >
+                        Read More
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p>🔍 No reviews found with the selected filters.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Review Detail Modal */}
+      {showReviewModal && selectedReviewModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setShowReviewModal(false)
+            setSelectedReviewModal(null)
+          }}
+        >
+          <div
+            className="modal-content modal-review-detail"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Full Review</h3>
+              <button
+                className="btn-close"
+                onClick={() => {
+                  setShowReviewModal(false)
+                  setSelectedReviewModal(null)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="detail-row">
+                <span className="label">Lot:</span>
+                <span className="value">{selectedReviewModal.lot_detail?.lot_name}</span>
+              </div>
+
+              <div className="detail-row">
+                <span className="label">Reviewer:</span>
+                <span className="value">
+                  {selectedReviewModal.user_detail?.firstname}{' '}
+                  {selectedReviewModal.user_detail?.lastname}
+                </span>
+              </div>
+
+              <div className="detail-row">
+                <span className="label">Rating:</span>
+                <span className="value">
+                  {'⭐'.repeat(selectedReviewModal.rating)} {selectedReviewModal.rating}/5
+                </span>
+              </div>
+
+              <div className="detail-row">
+                <span className="label">Date:</span>
+                <span className="value">
+                  {new Date(selectedReviewModal.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </span>
+              </div>
+
+              <div className="detail-row full-width">
+                <span className="label">Review:</span>
+                <p className="review-full-text">{selectedReviewModal.review_desc}</p>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowReviewModal(false)
+                  setSelectedReviewModal(null)
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

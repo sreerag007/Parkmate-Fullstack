@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import api from '../../services/api'
 import { toast } from 'react-toastify'
+import ReviewModal from '../../Components/ReviewModal'
 import '../Users/Reviews.scss'
 
 const AdminReviews = () => {
@@ -12,6 +13,8 @@ const AdminReviews = () => {
   const [filterLot, setFilterLot] = useState('')
   const [filterRating, setFilterRating] = useState('')
   const [sortBy, setSortBy] = useState('recent')
+  const [selectedReview, setSelectedReview] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Fetch all lots and reviews
   useEffect(() => {
@@ -232,9 +235,16 @@ const AdminReviews = () => {
                     <span className="stars">{'⭐'.repeat(review.rating)}</span>
                     <span className="count">{review.rating}/5</span>
                   </td>
-                  <td className="review-text" title={review.review_desc}>
-                    {review.review_desc.substring(0, 60)}
-                    {review.review_desc.length > 60 ? '...' : ''}
+                  <td className="review-text text-center">
+                    <button
+                      onClick={() => {
+                        setSelectedReview(review)
+                        setIsModalOpen(true)
+                      }}
+                      className="text-blue-600 hover:underline font-medium text-sm"
+                    >
+                      Show
+                    </button>
                   </td>
                   <td className="date">
                     {new Date(review.created_at).toLocaleDateString()}
@@ -254,6 +264,16 @@ const AdminReviews = () => {
       <div className="legend">
         <p>💡 <strong>Note:</strong> This dashboard shows all reviews across the platform. Monitor trends and ensure service quality.</p>
       </div>
+
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={isModalOpen}
+        review={selectedReview}
+        onClose={() => {
+          setIsModalOpen(false)
+          setSelectedReview(null)
+        }}
+      />
     </div>
   )
 }

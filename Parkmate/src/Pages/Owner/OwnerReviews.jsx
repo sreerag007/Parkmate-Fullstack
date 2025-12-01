@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import api from '../../services/api'
 import { toast } from 'react-toastify'
+import ReviewModal from '../../Components/ReviewModal'
 import '../Users/Reviews.scss'
 
 const OwnerReviews = () => {
@@ -11,6 +12,8 @@ const OwnerReviews = () => {
   const [loading, setLoading] = useState(true)
   const [filterLot, setFilterLot] = useState('')
   const [filterRating, setFilterRating] = useState('')
+  const [selectedReview, setSelectedReview] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const fetchOwnerLots = useCallback(async () => {
     try {
@@ -153,9 +156,16 @@ const OwnerReviews = () => {
                     <span className="stars">{'⭐'.repeat(review.rating)}</span>
                     <span className="count">{review.rating}/5</span>
                   </td>
-                  <td className="review-text" title={review.review_desc}>
-                    {review.review_desc.substring(0, 60)}
-                    {review.review_desc.length > 60 ? '...' : ''}
+                  <td className="review-text text-center">
+                    <button
+                      onClick={() => {
+                        setSelectedReview(review)
+                        setIsModalOpen(true)
+                      }}
+                      className="text-blue-600 hover:underline font-medium text-sm"
+                    >
+                      Show
+                    </button>
                   </td>
                   <td className="date">
                     {new Date(review.created_at).toLocaleDateString()}
@@ -175,6 +185,16 @@ const OwnerReviews = () => {
       <div className="legend">
         <p>💡 <strong>Note:</strong> Reviews are read-only. Customer reviews help you understand and improve your service.</p>
       </div>
+
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={isModalOpen}
+        review={selectedReview}
+        onClose={() => {
+          setIsModalOpen(false)
+          setSelectedReview(null)
+        }}
+      />
     </div>
   )
 }
