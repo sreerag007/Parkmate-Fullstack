@@ -115,6 +115,7 @@ class P_Lot(models.Model):
     latitude=models.DecimalField(max_digits=9,decimal_places=6,help_text="Latitude for map pin",null=True,blank=True)
     longitude=models.DecimalField(max_digits=9,decimal_places=6,help_text="Longitude for map pin",null=True,blank=True)
     total_slots=models.IntegerField()
+    lot_image=models.ImageField(upload_to="lot_images/",null=True,blank=True,help_text="Image for the parking lot card")
     #available_slots=models.BooleanField(default=True,help_text="True if the parking lot has at least one free slot,False if full.")
     
     def available_slots(self):

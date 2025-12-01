@@ -297,9 +297,33 @@ class P_LotVIewSet(ModelViewSet):
             return P_Lot.objects.filter(owner=owner)
         return P_Lot.objects.filter(owner__verification_status="APPROVED")
     
+    def create(self, request, *args, **kwargs):
+        """Override create to add debugging for image upload"""
+        print(f"\n{'='*60}")
+        print(f"📋 Creating lot - Content-Type: {request.content_type}")
+        print(f"📋 Request DATA keys: {list(request.data.keys())}")
+        print(f"📋 Request FILES keys: {list(request.FILES.keys())}")
+        print(f"📋 Has lot_image in DATA: {'lot_image' in request.data}")
+        print(f"📋 Has lot_image in FILES: {'lot_image' in request.FILES}")
+        
+        if 'lot_image' in request.FILES:
+            image = request.FILES['lot_image']
+            print(f"📸 Image in FILES - Name: {image.name}, Size: {image.size} bytes, Content-Type: {image.content_type}")
+        elif 'lot_image' in request.data:
+            print(f"📸 Image in DATA - Value: {request.data.get('lot_image')}")
+            
+        print(f"{'='*60}\n")
+        return super().create(request, *args, **kwargs)
+    
     def perform_create(self, serializer):
         owner=OwnerProfile.objects.get(auth_user=self.request.user)
+        print(f"💾 Saving lot with validated_data keys: {list(serializer.validated_data.keys())}")
+        print(f"💾 lot_image in validated_data: {'lot_image' in serializer.validated_data}")
+        if 'lot_image' in serializer.validated_data:
+            print(f"💾 lot_image value: {serializer.validated_data['lot_image']}")
+            
         lot = serializer.save(owner=owner)
+        print(f"✅ Lot saved: ID={lot.lot_id}, Name={lot.lot_name}, lot_image={lot.lot_image}")
         
         # Auto-create parking slots for the new lot
         total_slots = lot.total_slots
@@ -310,6 +334,7 @@ class P_LotVIewSet(ModelViewSet):
                 is_available=True
             )
         print(f"✅ Created {total_slots} parking slots for lot: {lot.lot_name}")
+
 
 #P_SlotViewsets
 class P_SlotViewSet(ModelViewSet):
@@ -1208,10 +1233,24 @@ class TasksViewSet(viewsets.ModelViewSet):
     
 class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class=ReviewSerializer
-    permission_classes=[IsAuthenticated]       
+    permission_classes=[IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Allow any user to read reviews (list, retrieve).
+        Require authentication for create, update, delete.
+        """
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]       
 
     def get_queryset(self):
         try:
+            # Check if user is authenticated
+            if not self.request.user or not self.request.user.is_authenticated:
+                # Unauthenticated users can see all reviews
+                return Review.objects.all().order_by('-created_at')
+            
             user_role = self.request.user.role
             lot_id = self.request.query_params.get("lot_id")  # Changed from "lot" to "lot_id"
             user_id = self.request.query_params.get("user_id")  # Also changed to "user_id" for consistency

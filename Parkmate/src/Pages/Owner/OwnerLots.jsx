@@ -20,7 +20,8 @@ const OwnerLots = () => {
         city: '',
         state: '',
         pincode: '',
-        total_slots: 10
+        total_slots: 10,
+        lot_image: null
     });
     const [formError, setFormError] = useState('');
     const [editingLot, setEditingLot] = useState(null);
@@ -85,15 +86,35 @@ const OwnerLots = () => {
         console.log('📝 Total slots to be sent:', newLot.total_slots, 'Type:', typeof newLot.total_slots);
 
         try {
-            // Ensure total_slots is a number
-            const lotPayload = {
-                ...newLot,
-                total_slots: parseInt(newLot.total_slots, 10)
-            };
-            console.log('📝 Creating new lot with payload:', lotPayload);
-            const response = await parkingService.createLot(lotPayload);
+            // Use FormData for multipart/form-data to handle image upload
+            const formData = new FormData();
+            formData.append('lot_name', newLot.lot_name);
+            formData.append('streetname', newLot.streetname);
+            formData.append('locality', newLot.locality || '');
+            formData.append('city', newLot.city);
+            formData.append('state', newLot.state || '');
+            formData.append('pincode', newLot.pincode);
+            formData.append('total_slots', parseInt(newLot.total_slots, 10));
+            
+            // Add image if provided
+            if (newLot.lot_image) {
+                formData.append('lot_image', newLot.lot_image);
+                console.log('📸 Image file added:', newLot.lot_image.name, 'Size:', newLot.lot_image.size);
+            }
+            
+            console.log('📝 Creating new lot with FormData - All fields:');
+            // Log all FormData entries for debugging
+            for (let [key, value] of formData.entries()) {
+                if (value instanceof File) {
+                    console.log(`  - ${key}: File(${value.name}, ${value.size} bytes)`);
+                } else {
+                    console.log(`  - ${key}: ${value}`);
+                }
+            }
+            
+            const response = await parkingService.createLot(formData);
             console.log('✅ Lot created successfully:', response);
-            console.log('✅ Response total_slots:', response.total_slots, 'Type:', typeof response.total_slots);
+            console.log('✅ Lot image URL from response:', response.lot_image_url || response.lot_image);
 
             setLots([...lots, response]);
             setNewLot({
@@ -103,7 +124,8 @@ const OwnerLots = () => {
                 city: '',
                 state: '',
                 pincode: '',
-                total_slots: 10
+                total_slots: 10,
+                lot_image: null
             });
             setShowAddForm(false);
             alert('✅ Parking lot created successfully!');
@@ -339,6 +361,19 @@ const OwnerLots = () => {
                                     +
                                 </button>
                             </div>
+                        </div>
+                        <div className="form-group">
+                            <label>Lot Image (Optional)</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => setNewLot({ ...newLot, lot_image: e.target.files[0] || null })}
+                            />
+                            {newLot.lot_image && (
+                                <div style={{ marginTop: '10px', color: '#10b981', fontSize: '0.9rem' }}>
+                                    ✓ {newLot.lot_image.name}
+                                </div>
+                            )}
                         </div>
                         <div className="form-actions">
                             <button type="submit" className="btn-save-changes">

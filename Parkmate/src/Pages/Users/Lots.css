@@ -14,6 +14,19 @@
     border: 1px solid rgba(2, 6, 23, 0.05);
 }
 
+.lot-container {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.lots-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
 .lot-image-wrapper {
     position: relative;
     width: 100%;
@@ -87,5 +100,9 @@
         flex: 1;
         text-align: center;
         min-width: 80px;
+    }
+
+    .lot-container {
+        padding: 20px 12px;
     }
 }

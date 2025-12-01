@@ -16,6 +16,16 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Token ${token}`;
     }
+    
+    // If data is FormData, configure it for multipart/form-data
+    if (config.data instanceof FormData) {
+      console.log('📤 Sending FormData - configuring for multipart upload');
+      // Don't set Content-Type, let the browser set it with the boundary
+      delete config.headers['Content-Type'];
+      // Disable axios transformations for FormData
+      config.transformRequest = [(data) => data];
+    }
+    
     return config;
   },
   (error) => {

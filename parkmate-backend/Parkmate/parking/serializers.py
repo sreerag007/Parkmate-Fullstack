@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.db.models import Avg
 from .models import (
     AuthUser,
     UserProfile,
@@ -192,6 +193,9 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
 class P_LotSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all(), required=False)
     available_slots=serializers.SerializerMethodField()    
+    lot_image_url = serializers.SerializerMethodField()  # Read-only URL output
+    avg_rating = serializers.SerializerMethodField()
+    
     class Meta:
         model = P_Lot
         fields = [
@@ -207,6 +211,9 @@ class P_LotSerializer(serializers.ModelSerializer):
             "longitude",
             "total_slots",
             "available_slots",
+            "lot_image",  # Writable field for uploads
+            "lot_image_url",  # Read-only URL field
+            "avg_rating",
         ]
     def get_available_slots(self, obj):
         try:
@@ -214,7 +221,25 @@ class P_LotSerializer(serializers.ModelSerializer):
         except:
             return 0    
 
-    read_only_fields = ["lot_id", "available_slots"]
+    def get_lot_image_url(self, obj):
+        """Return absolute URL for lot image"""
+        if obj.lot_image:
+            request = self.context.get('request')
+            image_url = obj.lot_image.url
+            if request:
+                return request.build_absolute_uri(image_url)
+            return image_url
+        return None
+
+    def get_avg_rating(self, obj):
+        """Calculate average rating for the lot"""
+        qs = Review.objects.filter(lot=obj)
+        if not qs.exists():
+            return None
+        avg = qs.aggregate(Avg('rating'))['rating__avg']
+        return round(avg, 1) if avg else None
+
+    read_only_fields = ["lot_id", "available_slots", "lot_image_url", "avg_rating"]
 
 
 # P_Slot serializer

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect fill="#e5e7eb" width="400" height="300"/>
+  <g transform="translate(200, 150)">
+    <text x="0" y="0" text-anchor="middle" font-size="24" fill="#9ca3af" font-family="system-ui, -apple-system, sans-serif" font-weight="600">
+      🅿️ Parking Lot
+    </text>
+    <text x="0" y="30" text-anchor="middle" font-size="14" fill="#6b7280" font-family="system-ui, -apple-system, sans-serif">
+      Image not available
+    </text>
+  </g>
+</svg>
