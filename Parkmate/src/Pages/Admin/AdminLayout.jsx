@@ -68,6 +68,9 @@ const AdminLayout = () => {
                     <Link to="/admin/employees" className={`nav-item ${isActive('/admin/employees')}`} onClick={handleNavClick}>
                         <span className="icon">👷</span> Employees
                     </Link>
+                    <Link to="/admin/reviews" className={`nav-item ${isActive('/admin/reviews')}`} onClick={handleNavClick}>
+                        <span className="icon">⭐</span> Reviews
+                    </Link>
                 </nav>
                 <div className="admin-footer">
                     <button onClick={handleLogout} className="nav-item logout-btn" style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', color: '#94a3b8' }}>

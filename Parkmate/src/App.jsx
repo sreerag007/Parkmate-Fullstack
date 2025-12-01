@@ -9,6 +9,7 @@ import DynamicLot from './Pages/Users/DynamicLot'
 import BookingConfirmation from './Pages/Users/BookingConfirmation'
 import Userprof from './Pages/Users/Userprof'
 import Service from './Pages/Users/Service'
+import Reviews from './Pages/Users/Reviews'
 import Navbar from './Components/Nav/Navbar'
 import OwnerLayout from './Pages/Owner/OwnerLayout'
 import OwnerDashboard from './Pages/Owner/OwnerDashboard'
@@ -17,6 +18,7 @@ import OwnerServices from './Pages/Owner/OwnerServices'
 import OwnerBookings from './Pages/Owner/OwnerBookings'
 import OwnerPayments from './Pages/Owner/OwnerPayments'
 import OwnerProfile from './Pages/Owner/OwnerProfile'
+import OwnerReviews from './Pages/Owner/OwnerReviews'
 import AdminLayout from './Pages/Admin/AdminLayout'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
 import AdminUsers from './Pages/Admin/AdminUsers'
@@ -24,6 +26,7 @@ import AdminOwners from './Pages/Admin/AdminOwners'
 import AdminBookings from './Pages/Admin/AdminBookings'
 import AdminServices from './Pages/Admin/AdminServices'
 import AdminEmployees from './Pages/Admin/AdminEmployees'
+import AdminReviews from './Pages/Admin/AdminReviews'
 import UserLogin from './Pages/Auth/UserLogin'
 import UserRegister from './Pages/Auth/UserRegister'
 import OwnerLogin from './Pages/Auth/OwnerLogin'
@@ -80,6 +83,7 @@ function AppWithWebSocket() {
 
                 {/* Protected User Routes (Optional, but good for profile) */}
                 <Route path="/profile" element={<Userprof />} />
+                <Route path="/reviews" element={<Reviews />} />
 
                 {/* Protected Owner Routes */}
                 <Route element={<ProtectedRoute role="owner" />}>
@@ -89,6 +93,7 @@ function AppWithWebSocket() {
                     <Route path="bookings" element={<OwnerBookings />} />
                     <Route path="payments" element={<OwnerPayments />} />
                     <Route path="services" element={<OwnerServices />} />
+                    <Route path="reviews" element={<OwnerReviews />} />
                     <Route path="profile" element={<OwnerProfile />} />
                   </Route>
                 </Route>
@@ -102,6 +107,7 @@ function AppWithWebSocket() {
                     <Route path="bookings" element={<AdminBookings />} />
                     <Route path="services" element={<AdminServices />} />
                     <Route path="employees" element={<AdminEmployees />} />
+                    <Route path="reviews" element={<AdminReviews />} />
                   </Route>
                 </Route>
               </Routes>

@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractUser
 from datetime import datetime, timedelta
 
@@ -282,14 +282,17 @@ class Review(models.Model):
     rev_id=models.AutoField(primary_key=True)
     lot=models.ForeignKey(to=P_Lot,on_delete=models.CASCADE,db_column='lot_id',related_name='review_of_lot')
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,db_column='user_id',related_name='user')
-    rating=models.IntegerField(default=5)
+    rating=models.IntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(5)])
     review_desc=models.TextField()
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Review {self.rating} by {self.user.firstname} for {self.lot.lot_name}"    
 
     class Meta:
         db_table='REVIEW'
+        ordering = ['-created_at']
 
 #class Login(models.Model):
     #login_id=models.AutoField(primary_key=True)

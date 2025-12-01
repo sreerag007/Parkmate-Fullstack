@@ -1211,14 +1211,104 @@ class ReviewViewSet(viewsets.ModelViewSet):
     permission_classes=[IsAuthenticated]       
 
     def get_queryset(self):
-        lot_id=self.request.query_params.get("lot")
-        if lot_id:
-            return Review.objects.filter(lot_id=lot_id)
-        return Review.objects.all()
+        try:
+            user_role = self.request.user.role
+            lot_id = self.request.query_params.get("lot_id")  # Changed from "lot" to "lot_id"
+            user_id = self.request.query_params.get("user_id")  # Also changed to "user_id" for consistency
+            
+            # Convert to integer if provided
+            if lot_id:
+                try:
+                    lot_id = int(lot_id)
+                except (ValueError, TypeError):
+                    lot_id = None
+            
+            if user_id:
+                try:
+                    user_id = int(user_id)
+                except (ValueError, TypeError):
+                    user_id = None
+            
+            print(f"DEBUG: get_queryset called for user: {self.request.user.username}, role: {user_role}")
+            print(f"DEBUG: Query params - lot_id: {lot_id} (type: {type(lot_id).__name__}), user_id: {user_id} (type: {type(user_id).__name__})")
+            print(f"DEBUG: Total reviews in DB: {Review.objects.count()}")
+            
+            # For users - show all reviews, they can only edit/delete their own
+            # For owners - show only reviews for their lots
+            # For admins - show all reviews
+            
+            if user_role == 'Owner':
+                # User is an owner - filter by their lots
+                try:
+                    owner_profile = OwnerProfile.objects.get(auth_user=self.request.user)
+                    print(f"DEBUG: Found owner profile ID: {owner_profile.id}, name: {owner_profile.firstname} {owner_profile.lastname}")
+                    
+                    # Filter lots where owner field equals this owner_profile
+                    owned_lots = P_Lot.objects.filter(owner=owner_profile)
+                    owned_lots_list = list(owned_lots.values_list('lot_id', 'lot_name'))
+                    print(f"DEBUG: Owner's lots: {owned_lots_list}")
+                    
+                    # Get all reviews for these lots
+                    queryset = Review.objects.filter(lot__in=owned_lots)
+                    print(f"DEBUG: Reviews found for owner's lots: {queryset.count()}")
+                    
+                    # Debug: Show all reviews with their lot_id
+                    all_reviews = Review.objects.all().values_list('rev_id', 'lot_id', 'rating', 'review_desc')
+                    print(f"DEBUG: All reviews in DB: {list(all_reviews)}")
+                    
+                except OwnerProfile.DoesNotExist:
+                    print(f"DEBUG: OwnerProfile not found for auth_user {self.request.user.id}")
+                    queryset = Review.objects.none()
+            elif user_role == 'Admin':
+                # User is an admin - show all reviews
+                queryset = Review.objects.all()
+                print(f"DEBUG: Admin user - showing all {queryset.count()} reviews")
+            else:
+                # Regular user - show all reviews (for reading), they can only edit their own
+                queryset = Review.objects.all()
+                print(f"DEBUG: Regular user - showing all {queryset.count()} reviews")
+            
+            if lot_id:
+                queryset = queryset.filter(lot_id=lot_id)
+                print(f"DEBUG: Filtered by lot_id={lot_id}, results: {queryset.count()}")
+            if user_id:
+                queryset = queryset.filter(user_id=user_id)
+                print(f"DEBUG: Filtered by user_id={user_id}, results: {queryset.count()}")
+                
+            return queryset.order_by('-created_at')
+        except Exception as e:
+            print(f"DEBUG: Exception in get_queryset: {str(e)}")
+            return Review.objects.none()
 
     def perform_create(self, serializer):
-        user_profile=UserProfile.objects.get(auth_user=self.request.user)
-        serializer.save(user=user_profile)                             
+        try:
+            user_profile = UserProfile.objects.get(auth_user=self.request.user)
+            serializer.save(user=user_profile)
+        except UserProfile.DoesNotExist:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("User profile not found")
+
+    def perform_update(self, serializer):
+        # Only allow users to update their own reviews
+        from rest_framework.exceptions import PermissionDenied
+        try:
+            user_profile = UserProfile.objects.get(auth_user=self.request.user)
+            if serializer.instance.user != user_profile:
+                raise PermissionDenied("You can only edit your own reviews")
+            serializer.save()
+        except UserProfile.DoesNotExist:
+            raise PermissionDenied("User profile not found")
+
+    def perform_destroy(self, instance):
+        # Only allow users to delete their own reviews
+        from rest_framework.exceptions import PermissionDenied
+        try:
+            user_profile = UserProfile.objects.get(auth_user=self.request.user)
+            if instance.user != user_profile:
+                raise PermissionDenied("You can only delete your own reviews")
+            instance.delete()
+        except UserProfile.DoesNotExist:
+            raise PermissionDenied("User profile not found")                             
 
 
 class VerifyCashPaymentView(APIView):

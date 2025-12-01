@@ -718,7 +718,7 @@ class TasksSerializer(serializers.ModelSerializer):
 class ReviewUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ["id", "firstname", "lastname"]
+        fields = ["firstname", "lastname"]
 
 
 class ReviewPLotSerializer(serializers.ModelSerializer):
@@ -728,7 +728,7 @@ class ReviewPLotSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=UserProfile.objects.all())
+    user = serializers.PrimaryKeyRelatedField(queryset=UserProfile.objects.all(), required=False)
     lot = serializers.PrimaryKeyRelatedField(queryset=P_Lot.objects.all())
     user_detail = ReviewUserSerializer(source="user",read_only=True)
     lot_detail = ReviewPLotSerializer(source="lot",read_only=True)
@@ -740,6 +740,25 @@ class ReviewSerializer(serializers.ModelSerializer):
             "user_detail",
             "lot_detail",
             "user",
-            "lot", "rating",
+            "lot",
+            "rating",
             "review_desc",
+            "created_at",
+            "updated_at",
         ]
+        read_only_fields = ["rev_id", "user_detail", "lot_detail", "created_at", "updated_at"]
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5")
+        return value
+
+    def validate_review_desc(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Review description cannot be empty")
+        return value.strip()
+
+    def validate_lot(self, value):
+        if not value:
+            raise serializers.ValidationError("Lot is required")
+        return value

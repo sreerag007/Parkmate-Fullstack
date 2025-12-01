@@ -61,6 +61,7 @@ const Navbar = () => {
           {user ? (
             <>
               <Link to="/profile" className="nav-link">Profile</Link>
+              <Link to="/reviews" className="nav-link">Reviews</Link>
               {hasBooking && <Link to="/service" className="nav-link">Services</Link>}
               <button onClick={logoutUser} className="nav-link btn-link">Logout</button>
             </>
