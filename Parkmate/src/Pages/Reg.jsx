@@ -34,7 +34,7 @@ export default function Reg() {
       // link client id to email for bookings convenience
       localStorage.setItem('parkmate_client_id', user.email)
       navigate('/profile')
-    } catch (e) {
+    } catch {
       setError('Could not save user in browser storage')
     }
   }

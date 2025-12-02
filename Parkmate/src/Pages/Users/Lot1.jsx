@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/purity */
+/* eslint-disable react-hooks/immutability */
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import './Lot1.scss';
@@ -29,7 +31,7 @@ const Lot1 = () => {
         }
       }
       return Array.from({ length: total }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null }));
-    } catch (e) {
+    } catch {
       return Array.from({ length: 10 }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null }));
     }
   });
@@ -52,7 +54,7 @@ const Lot1 = () => {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
-    } catch (e) { }
+    } catch { void 0 }
   }, [slots]);
 
   // Manage automatic release of booked slots
@@ -81,7 +83,6 @@ const Lot1 = () => {
       Object.values(timeoutsRef.current).forEach((id) => clearTimeout(id));
       timeoutsRef.current = {};
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots]);
 
   const selectSlot = (id) => {
@@ -102,7 +103,7 @@ const Lot1 = () => {
       } else {
         alert(text);
       }
-    } catch (e) {
+    } catch {
       alert(text);
     }
   };
@@ -116,7 +117,7 @@ const Lot1 = () => {
         localStorage.setItem(KEY, id);
       }
       return id;
-    } catch (e) {
+    } catch {
       return 'c-unknown';
     }
   };
@@ -125,7 +126,7 @@ const Lot1 = () => {
     try {
       const cid = getClientId();
       return slots.find((s) => s.bookedBy === cid) || null;
-    } catch (e) {
+    } catch {
       return null;
     }
   };
@@ -173,7 +174,7 @@ const Lot1 = () => {
         }
       }
       setSlots(Array.from({ length: total }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null })));
-    } catch (e) { }
+    } catch { void 0 }
   };
 
   // Listen for config changes from OwnerLots

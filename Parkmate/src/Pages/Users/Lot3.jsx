@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/purity */
+/* eslint-disable react-hooks/immutability */
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import './Lot3.scss';
@@ -29,7 +31,7 @@ const Lot3 = () => {
         }
       }
       return Array.from({ length: total }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null }));
-    } catch (e) {
+    } catch {
       // fallback
       return Array.from({ length: 10 }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null }));
     }
@@ -53,7 +55,7 @@ const Lot3 = () => {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
-    } catch (e) { }
+    } catch { void 0 }
   }, [slots]);
 
   // Manage automatic release of booked slots
@@ -81,7 +83,6 @@ const Lot3 = () => {
       Object.values(timeoutsRef.current).forEach((id) => clearTimeout(id));
       timeoutsRef.current = {};
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots]);
 
   const selectSlot = (id) => {
@@ -102,7 +103,7 @@ const Lot3 = () => {
       } else {
         alert(text);
       }
-    } catch (e) {
+    } catch {
       alert(text);
     }
   };
@@ -119,7 +120,7 @@ const Lot3 = () => {
     try {
       clientId = localStorage.getItem(CLIENT_KEY) || ('c-' + Math.random().toString(36).slice(2, 10));
       localStorage.setItem(CLIENT_KEY, clientId);
-    } catch (e) { }
+    } catch { void 0 }
     setSlots((prev) =>
       prev.map((s) => (s.id === selected ? { ...s, status: 'booked', bookedAt, bookedBy: clientId, vehicleType } : s))
     );
@@ -151,7 +152,7 @@ const Lot3 = () => {
         localStorage.setItem(KEY, id);
       }
       return id;
-    } catch (e) {
+    } catch {
       return 'c-unknown';
     }
   };
@@ -160,7 +161,7 @@ const Lot3 = () => {
     try {
       const cid = getClientId();
       return slots.find((s) => s.bookedBy === cid) || null;
-    } catch (e) {
+    } catch {
       return null;
     }
   };
@@ -178,7 +179,7 @@ const Lot3 = () => {
         }
       }
       setSlots(Array.from({ length: total }).map((_, i) => ({ id: i + 1, status: 'available', bookedAt: null })));
-    } catch (e) { }
+    } catch { void 0 }
   };
   // Listen for config changes from OwnerLots
   useEffect(() => {

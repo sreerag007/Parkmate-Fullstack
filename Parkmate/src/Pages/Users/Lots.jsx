@@ -6,7 +6,7 @@ import LotCard from '../../Components/LotCard';
 import './Lots.css';
 
 const Lots = () => {
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const { user } = useAuth();
   const [lots, setLots] = useState([]);
   const [loading, setLoading] = useState(true);

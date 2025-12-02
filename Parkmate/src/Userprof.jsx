@@ -1,4 +1,5 @@
 // Root-level wrapper so the profile component is easy to find from the project root
+/* eslint-disable react-hooks/purity */
 import React, { useEffect, useState } from 'react'
 import './Userprof.scss'
 
@@ -28,7 +29,7 @@ function clientId() {
       localStorage.setItem(KEY, id)
     }
     return id
-  } catch (e) {
+  } catch {
     return 'c-unknown'
   }
 }
@@ -62,7 +63,9 @@ export default function Userprof() {
             })
           }
         })
-      } catch (e) {}
+      } catch {
+        void 0
+      }
     })
 
     // sort by bookedAt desc

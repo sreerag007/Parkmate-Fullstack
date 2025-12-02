@@ -33,7 +33,7 @@ const EmployeeRegister = () => {
         setLoading(true)
 
         try {
-            const result = await parkingService.createEmployee(formData)
+            const _result = await parkingService.createEmployee(formData)
             setSuccess(true)
             alert('Registration successful! Please contact an Owner/Admin for assignment to a parking lot.')
             setTimeout(() => {

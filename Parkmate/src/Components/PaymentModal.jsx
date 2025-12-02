@@ -14,7 +14,7 @@ const PaymentModal = ({
   metadata = {}  // Additional data like { serviceName, carwashTypeId, bookingId }
 }) => {
   const [method, setMethod] = useState('')
-  const [amount, setAmount] = useState(price || 0)
+  const [amount, _setAmount] = useState(price || 0)
   const [showQRPopup, setShowQRPopup] = useState(false)
   const [showCardPopup, setShowCardPopup] = useState(false)
 
@@ -58,14 +58,7 @@ const PaymentModal = ({
     onConfirm(paymentData)
   }
 
-  const getPaymentMethodDisplay = (method) => {
-    const methods = {
-      'CC': '💳 Credit Card',
-      'Cash': '💵 Cash',
-      'UPI': '📱 UPI / QR Code'
-    }
-    return methods[method] || method
-  }
+  // payment method display helper removed (unused) to satisfy linter
 
   return (
     <>

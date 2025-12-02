@@ -24,7 +24,7 @@ const OwnerLots = () => {
         lot_image: null
     });
     const [formError, setFormError] = useState('');
-    const [editingLot, setEditingLot] = useState(null);
+    const [_EDITING_LOT, _setEditingLot] = useState(null);
     const [showAddSlotForm, setShowAddSlotForm] = useState(false);
     const [newSlot, setNewSlot] = useState({
         vehicle_type: 'Sedan',

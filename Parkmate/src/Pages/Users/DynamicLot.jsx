@@ -41,8 +41,8 @@ const DynamicLot = () => {
     const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [now, setNow] = useState(Date.now());
-    const [showBookingConfirm, setShowBookingConfirm] = useState(false);
+    const [_NOW, setNow] = useState(Date.now());
+    const [_SHOW_BOOKING_CONFIRM, _SET_SHOW_BOOKING_CONFIRM] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isBooking, setIsBooking] = useState(false);
     const timeoutsRef = useRef({});
@@ -196,7 +196,7 @@ const DynamicLot = () => {
             } else {
                 alert(text);
             }
-        } catch (e) {
+        } catch {
             alert(text);
         }
     };

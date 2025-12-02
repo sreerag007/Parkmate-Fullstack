@@ -9,7 +9,7 @@ import './BookingConfirmation.scss';
 const BookingConfirmation = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user: _USER, logout: _LOGOUT } = useAuth();
 
   const [booking, setBooking] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
@@ -37,7 +37,7 @@ const BookingConfirmation = () => {
           setIsExpired(cachedData.status.toLowerCase() === 'completed');
           setLoading(false);
           return;
-        } catch (e) {
+        } catch {
           console.log('Cache parse error, fetching fresh data');
         }
       }

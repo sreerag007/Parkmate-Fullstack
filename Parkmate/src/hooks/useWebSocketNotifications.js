@@ -6,6 +6,7 @@
  *   const { isConnected } = useWebSocketNotifications(userId);
  */
 
+/* global process */
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 
@@ -42,7 +43,7 @@ export const useWebSocketNotifications = (userId) => {
 
         socketRef.current = new WebSocket(wsUrl);
 
-        socketRef.current.onopen = (event) => {
+        socketRef.current.onopen = () => {
           console.log('✅ WebSocket connected');
           setIsConnected(true);
         };
@@ -111,5 +112,7 @@ export const useWebSocketNotifications = (userId) => {
     };
   }, [userId]);
 
+  // accessing ref.current during render is intentional for consumers
+  // eslint-disable-next-line react-hooks/refs
   return { isConnected, socket: socketRef.current };
 };

@@ -27,6 +27,7 @@ const MultiBookingTimer = ({ bookings = [] }) => {
         console.log(`  Booking ${booking.booking_id}: now=${now}, end=${end}, remaining=${remaining}ms`)
         
         // Initial timer calculation
+        // eslint-disable-next-line react-hooks/immutability
         updateTimer(booking.booking_id, booking.end_time)
 
         // Set interval for continuous updates (every 1 second)

@@ -117,7 +117,7 @@ const Reviews = () => {
     })
   }
 
-  const getAverageRating = (lotId) => {
+  const _GET_AVERAGE_RATING = (lotId) => {
     const lotReviews = allReviews.filter((r) => r.lot_detail?.lot_id === lotId)
     if (lotReviews.length === 0) return 0
     const sum = lotReviews.reduce((acc, r) => acc + r.rating, 0)

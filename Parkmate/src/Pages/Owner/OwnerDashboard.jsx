@@ -81,7 +81,7 @@ const OwnerDashboard = () => {
                 console.log('📊 Occupancy rate:', occupancyRate, `(${occupiedSlots}/${totalSlots})`)
 
                 // Create recent activity from OWNER'S bookings only
-                const recentActivity = ownerBookings.slice(0, 5).map((booking, idx) => ({
+                const recentActivity = ownerBookings.slice(0, 5).map((booking) => ({
                     id: booking.booking_id,
                     text: `Booking #${booking.booking_id} - ${booking.status}`,
                     time: new Date(booking.booking_time).toLocaleDateString(),

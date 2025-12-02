@@ -12,6 +12,8 @@ const Navbar = () => {
 
   // close mobile menu when route changes
   useEffect(() => {
+    // calling setState here is intentional to close mobile menu on route change
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(false)
   }, [location.pathname])
 
@@ -19,6 +21,7 @@ const Navbar = () => {
   useEffect(() => {
     try {
       const client = localStorage.getItem('parkmate_client_id')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (!client) return setHasBooking(false)
       const keys = ['parkmate_lot1_slots', 'parkmate_lot2_slots', 'parkmate_lot3_slots']
       const any = keys.some((k) => {
@@ -27,10 +30,10 @@ const Navbar = () => {
         try {
           const arr = JSON.parse(raw)
           return arr.some((s) => s && s.bookedBy === client)
-        } catch (e) { return false }
+        } catch { return false }
       })
       setHasBooking(!!any)
-    } catch (e) { setHasBooking(false) }
+    } catch { setHasBooking(false) }
   }, [location.pathname])
 
 

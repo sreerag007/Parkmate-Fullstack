@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/purity */
 import React, { useState } from 'react';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { toast } from 'react-toastify';

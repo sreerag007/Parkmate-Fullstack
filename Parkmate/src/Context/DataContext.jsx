@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import parkingService from '../services/parkingService';
 import authService from '../services/authService';
@@ -8,18 +9,18 @@ export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
     // State for all data
-    const [users, setUsers] = useState([]);
-    const [owners, setOwners] = useState([]);
+    const [users, _setUsers] = useState([]);
+    const [owners, _setOwners] = useState([]);
     const [parkingLots, setParkingLots] = useState([]);
-    const [parkingSlots, setParkingSlots] = useState([]);
+    const [parkingSlots, _setParkingSlots] = useState([]);
     const [bookings, setBookings] = useState([]);
-    const [payments, setPayments] = useState([]);
+    const [payments, _setPayments] = useState([]);
     const [services, setServices] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [reviews, setReviews] = useState([]);
-    const [carwashes, setCarwashes] = useState([]);
+    const [carwashes, _setCarwashes] = useState([]);
     const [carwashTypes, setCarwashTypes] = useState([]);
-    const [tasks, setTasks] = useState([]);
+    const [tasks, _setTasks] = useState([]);
     
     // Loading states
     const [loading, setLoading] = useState(false);

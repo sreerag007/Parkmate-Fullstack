@@ -79,7 +79,7 @@ const AdminOwners = () => {
         }
     }
 
-    const handleStatusChange = async (ownerId, newStatus) => {
+    const _handleStatusChange = async (ownerId, newStatus) => {
         try {
             setActionLoading(true)
             await api.patch(`/owner-profiles/${ownerId}/`, { 
