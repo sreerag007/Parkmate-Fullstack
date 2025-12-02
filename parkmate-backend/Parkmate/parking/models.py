@@ -248,20 +248,28 @@ class Payment(models.Model):
         ('FAILED', 'Failed'),
         ('PENDING', 'Pending'),
     ]
+    
+    SERVICE_TYPE_CHOICES = [
+        ('slot_booking', 'Parking Slot Booking'),
+        ('car_wash', 'Car Wash Service'),
+    ]
 
     pay_id=models.AutoField(primary_key=True)
-    booking=models.ForeignKey(to=Booking,on_delete=models.CASCADE,related_name='payments')
+    booking=models.ForeignKey(to=Booking,on_delete=models.CASCADE,related_name='payments',null=True,blank=True,help_text="Linked parking slot booking (optional, for slot bookings)")
+    carwash_booking=models.ForeignKey(to='CarWashBooking',on_delete=models.CASCADE,related_name='payments',null=True,blank=True,help_text="Linked car wash booking (optional, for car wash bookings)")
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,related_name='payments_made_by_user')
     payment_method=models.CharField(max_length=100,choices=PAYMENT_CHOICES)
     amount=models.DecimalField(max_digits=8,decimal_places=2,default=0.00)
     status=models.CharField(max_length=10,choices=PAYMENT_STATUS_CHOICES,default='SUCCESS')
+    service_type=models.CharField(max_length=20,choices=SERVICE_TYPE_CHOICES,default='slot_booking',help_text="Type of service being paid for")
     transaction_id=models.CharField(max_length=100,blank=True,null=True)
     created_at=models.DateTimeField(auto_now_add=True, null=True)
     verified_by=models.ForeignKey(to=AuthUser,on_delete=models.SET_NULL,null=True,blank=True,related_name='payments_verified')
     verified_at=models.DateTimeField(null=True,blank=True)
 
     def __str__(self):
-        return f"Payment {self.pay_id} for Booking {self.booking.booking_id} - {self.status}"    
+        booking_ref = f"Booking {self.booking.booking_id}" if self.booking else f"CarWash {self.carwash_booking.carwash_booking_id}"
+        return f"Payment {self.pay_id} for {booking_ref} - {self.status}"    
 
     class Meta:
         db_table='PAYEMENT'
@@ -294,6 +302,81 @@ class Review(models.Model):
     class Meta:
         db_table='REVIEW'
         ordering = ['-created_at']
+
+
+class CarWashBooking(models.Model):
+    """
+    Independent Car Wash Booking model - NOT tied to parking slot bookings.
+    Allows users to book car wash services separately from lot bookings.
+    """
+    
+    WASH_TYPE_CHOICES = [
+        ('Exterior', 'Exterior'),
+        ('Interior Deep Clean', 'Interior Deep Clean'),
+        ('Full Service', 'Full Service'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Payment'),
+        ('confirmed', 'Confirmed'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('failed', 'Failed'),
+    ]
+    
+    carwash_booking_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(to=UserProfile, on_delete=models.CASCADE, db_column='user_id', related_name='carwash_bookings')
+    lot = models.ForeignKey(to=P_Lot, on_delete=models.SET_NULL, null=True, blank=True, db_column='lot_id', related_name='carwash_bookings', help_text="Optional parking lot for car wash")
+    service_type = models.CharField(max_length=50, choices=WASH_TYPE_CHOICES, default='Full Service', help_text="Type of car wash service")
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00, help_text="Booking price")
+    payment_method = models.CharField(max_length=100, choices=PAYMENT_CHOICES, help_text="Payment method used")
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending', help_text="Payment verification status")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', help_text="Booking status")
+    booking_time = models.DateTimeField(auto_now_add=True, help_text="When the booking was created")
+    scheduled_time = models.DateTimeField(null=True, blank=True, help_text="When the car wash is scheduled")
+    completed_time = models.DateTimeField(null=True, blank=True, help_text="When the car wash was completed")
+    notes = models.TextField(blank=True, null=True, help_text="Additional notes or special requests")
+    transaction_id = models.CharField(max_length=100, blank=True, null=True, help_text="Payment transaction ID for online payments")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"CarWash Booking {self.carwash_booking_id} - {self.user.firstname} ({self.service_type}) - {self.status}"
+    
+    class Meta:
+        db_table = 'CARWASH_BOOKING'
+        ordering = ['-booking_time']
+
+
+class CarWashService(models.Model):
+    """
+    Master data model for car wash service types.
+    Defines available wash services and their base prices.
+    """
+    
+    carwash_service_id = models.AutoField(primary_key=True)
+    service_name = models.CharField(max_length=100, unique=True, help_text="Name of the car wash service (e.g., Exterior Wash)")
+    service_type = models.CharField(max_length=50, help_text="Service type identifier (e.g., exterior, interior, full)")
+    description = models.TextField(help_text="Detailed description of what's included in this service")
+    base_price = models.DecimalField(max_digits=8, decimal_places=2, help_text="Base price for this service")
+    estimated_duration = models.IntegerField(default=30, help_text="Estimated duration in minutes")
+    is_active = models.BooleanField(default=True, help_text="Is this service currently available for booking?")
+    icon = models.CharField(max_length=50, blank=True, null=True, help_text="Icon identifier for frontend (e.g., 'droplets', 'sparkles')")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.service_name} (₹{self.base_price})"
+    
+    class Meta:
+        db_table = 'CARWASH_SERVICE'
+        ordering = ['service_name']
 
 #class Login(models.Model):
     #login_id=models.AutoField(primary_key=True)

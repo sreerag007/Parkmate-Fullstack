@@ -15,6 +15,8 @@ from .models import (
     Review,
     Employee,
     Tasks,
+    CarWashBooking,
+    CarWashService,
     VEHICLE_CHOICES,
     BOOKING_CHOICES,
     PAYMENT_CHOICES,
@@ -787,3 +789,118 @@ class ReviewSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("Lot is required")
         return value
+
+
+# Car Wash Serializers
+
+class CarWashServiceSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CarWashService master data.
+    Used to display available wash types and prices to users.
+    """
+    class Meta:
+        model = CarWashService
+        fields = [
+            'carwash_service_id',
+            'service_name',
+            'service_type',
+            'description',
+            'base_price',
+            'estimated_duration',
+            'is_active',
+            'icon',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['carwash_service_id', 'created_at', 'updated_at']
+
+
+class CarWashBookingSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CarWashBooking model.
+    Handles creation, update, and retrieval of car wash bookings.
+    Includes nested user and lot details for read operations.
+    """
+    user_detail = serializers.SerializerMethodField()
+    lot_detail = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CarWashBooking
+        fields = [
+            'carwash_booking_id',
+            'user',
+            'user_detail',
+            'lot',
+            'lot_detail',
+            'service_type',
+            'price',
+            'payment_method',
+            'payment_status',
+            'status',
+            'booking_time',
+            'scheduled_time',
+            'completed_time',
+            'notes',
+            'transaction_id',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'carwash_booking_id',
+            'user_detail',
+            'lot_detail',
+            'booking_time',
+            'created_at',
+            'updated_at',
+        ]
+    
+    def get_user_detail(self, obj):
+        """Return nested user details"""
+        return {
+            'user_id': obj.user.id,
+            'firstname': obj.user.firstname,
+            'lastname': obj.user.lastname,
+            'phone': obj.user.phone,
+        }
+    
+    def get_lot_detail(self, obj):
+        """Return nested lot details"""
+        if obj.lot:
+            return {
+                'lot_id': obj.lot.lot_id,
+                'lot_name': obj.lot.lot_name,
+                'city': obj.lot.city,
+                'state': obj.lot.state,
+            }
+        return None
+
+
+class CarWashPaymentSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Payment model when linked to car wash bookings.
+    Includes car wash specific details.
+    """
+    carwash_booking_detail = CarWashBookingSerializer(source='carwash_booking', read_only=True)
+    
+    class Meta:
+        model = Payment
+        fields = [
+            'pay_id',
+            'carwash_booking',
+            'carwash_booking_detail',
+            'user',
+            'payment_method',
+            'amount',
+            'status',
+            'service_type',
+            'transaction_id',
+            'created_at',
+            'verified_by',
+            'verified_at',
+        ]
+        read_only_fields = [
+            'pay_id',
+            'carwash_booking_detail',
+            'created_at',
+            'verified_at',
+        ]

@@ -9,6 +9,8 @@ import DynamicLot from './Pages/Users/DynamicLot'
 import BookingConfirmation from './Pages/Users/BookingConfirmation'
 import Userprof from './Pages/Users/Userprof'
 import Service from './Pages/Users/Service'
+import CarWash from './Pages/Users/CarWash'
+import CarWashHistory from './Pages/Users/CarWashHistory'
 import Reviews from './Pages/Users/Reviews'
 import Navbar from './Components/Nav/Navbar'
 import OwnerLayout from './Pages/Owner/OwnerLayout'
@@ -19,6 +21,7 @@ import OwnerBookings from './Pages/Owner/OwnerBookings'
 import OwnerPayments from './Pages/Owner/OwnerPayments'
 import OwnerProfile from './Pages/Owner/OwnerProfile'
 import OwnerReviews from './Pages/Owner/OwnerReviews'
+import OwnerCarWash from './Pages/Owner/OwnerCarWash'
 import AdminLayout from './Pages/Admin/AdminLayout'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
 import AdminUsers from './Pages/Admin/AdminUsers'
@@ -80,6 +83,8 @@ function AppWithWebSocket() {
                 <Route path="/lots/:lotId" element={<DynamicLot />} />
                 <Route path="/booking-confirmation" element={<BookingConfirmation />} />
                 <Route path="/service" element={<Service />} />
+                <Route path="/carwash" element={<CarWash />} />
+                <Route path="/carwash/my-bookings" element={<CarWashHistory />} />
 
                 {/* Protected User Routes (Optional, but good for profile) */}
                 <Route path="/profile" element={<Userprof />} />
@@ -91,6 +96,7 @@ function AppWithWebSocket() {
                     <Route index element={<OwnerDashboard />} />
                     <Route path="lots" element={<OwnerLots />} />
                     <Route path="bookings" element={<OwnerBookings />} />
+                    <Route path="carwash" element={<OwnerCarWash />} />
                     <Route path="payments" element={<OwnerPayments />} />
                     <Route path="services" element={<OwnerServices />} />
                     <Route path="reviews" element={<OwnerReviews />} />

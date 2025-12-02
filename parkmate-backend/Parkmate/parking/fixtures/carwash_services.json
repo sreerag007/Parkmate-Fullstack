@@ -1,0 +1,47 @@
+[
+  {
+    "model": "parking.carwashservice",
+    "pk": 1,
+    "fields": {
+      "service_name": "Exterior",
+      "service_type": "exterior",
+      "description": "Professional exterior wash - removes dirt and grime from outside",
+      "base_price": "299.00",
+      "estimated_duration": 20,
+      "is_active": true,
+      "icon": "Droplets",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "parking.carwashservice",
+    "pk": 2,
+    "fields": {
+      "service_name": "Interior Deep Clean",
+      "service_type": "interior",
+      "description": "Interior deep cleaning - vacuum, wipe surfaces, and freshen up inside",
+      "base_price": "350.00",
+      "estimated_duration": 30,
+      "is_active": true,
+      "icon": "Wind",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "parking.carwashservice",
+    "pk": 3,
+    "fields": {
+      "service_name": "Full Service",
+      "service_type": "full",
+      "description": "Complete wash - both exterior and interior deep cleaning",
+      "base_price": "499.00",
+      "estimated_duration": 50,
+      "is_active": true,
+      "icon": "Sparkles",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  }
+]

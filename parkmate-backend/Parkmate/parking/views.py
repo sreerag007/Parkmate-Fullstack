@@ -2,24 +2,28 @@ from rest_framework import viewsets
 from rest_framework.viewsets import ViewSet, ModelViewSet
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
+from rest_framework import permissions
 from rest_framework.authtoken.models import Token
 from rest_framework import status
 from rest_framework import serializers
 from rest_framework.views import APIView
 from django.contrib.auth import logout, authenticate
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework.parsers import MultiPartParser, FormParser,JSONParser
 from rest_framework.decorators import action
 
 from .models import (AuthUser, UserProfile, P_Lot, P_Slot, OwnerProfile, Booking,
-                     Payment, Tasks, Carwash, Carwash_type, Employee, Review)
+                     Payment, Tasks, Carwash, Carwash_type, Employee, Review,
+                     CarWashBooking, CarWashService)
 
 from .serializers import (UserRegisterSerializer, OwnerRegisterSerializer,
                           UserProfileSerializer, OwnerProfileSerializer,                          
                           P_LotSerializer,P_SlotSerializer,BookingSerializer,
                           PaymentSerializer,CarwashTypeSerializer,CarwashSerializer,
                           EmployeeSerializer,TasksSerializer,ReviewSerializer,
-                          LoginSerializer)
+                          LoginSerializer, CarWashServiceSerializer,
+                          CarWashBookingSerializer, CarWashPaymentSerializer)
 
 from .notification_utils import send_ws_notification
 
@@ -294,8 +298,22 @@ class P_LotVIewSet(ModelViewSet):
 
         if user.role =="Owner":
             owner=OwnerProfile.objects.get(auth_user=user)
-            return P_Lot.objects.filter(owner=owner)
-        return P_Lot.objects.filter(owner__verification_status="APPROVED")
+            queryset = P_Lot.objects.filter(owner=owner)
+        else:
+            queryset = P_Lot.objects.filter(owner__verification_status="APPROVED")
+        
+        # Add search functionality
+        search_query = self.request.query_params.get('q', '').strip()
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(lot_name__icontains=search_query) |
+                Q(street_name__icontains=search_query) |
+                Q(locality__icontains=search_query) |
+                Q(city__icontains=search_query)
+            )
+        
+        return queryset
     
     def create(self, request, *args, **kwargs):
         """Override create to add debugging for image upload"""
@@ -1600,3 +1618,572 @@ class OwnerPaymentsView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+# Car Wash ViewSets
+
+class CarWashServiceViewSet(ModelViewSet):
+    """
+    ViewSet for CarWashService master data.
+    Provides endpoints to list available car wash services and their prices.
+    """
+    queryset = CarWashService.objects.filter(is_active=True)
+    serializer_class = CarWashServiceSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def get_queryset(self):
+        """Return only active car wash services"""
+        return CarWashService.objects.filter(is_active=True)
+
+
+class CarWashBookingViewSet(ModelViewSet):
+    """
+    ViewSet for CarWashBooking.
+    Handles creation, retrieval, and management of car wash bookings.
+    """
+    serializer_class = CarWashBookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Users only see their own car wash bookings"""
+        user = self.request.user
+        try:
+            user_profile = UserProfile.objects.get(auth_user=user)
+            return CarWashBooking.objects.filter(user=user_profile).order_by('-booking_time')
+        except UserProfile.DoesNotExist:
+            return CarWashBooking.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new car wash booking with validation.
+        User is automatically set from request.user.
+        
+        Validation Rules:
+        1. Scheduled time must be in the future
+        2. No double-bookings at same time/lot
+        3. Minimum 30 minutes advance booking
+        4. User must have active profile
+        """
+        print(f"\n{'='*60}")
+        print(f"📋 Creating car wash booking with validation")
+        print(f"📋 User: {request.user.username}")
+        print(f"📋 Request DATA: {request.data}")
+        
+        try:
+            user_profile = UserProfile.objects.get(auth_user=request.user)
+            
+            # Validation Rule 1: Check if scheduled_time is provided
+            scheduled_time = request.data.get('scheduled_time')
+            if not scheduled_time:
+                print(f"❌ Validation failed: scheduled_time is required")
+                print(f"{'='*60}\n")
+                return Response(
+                    {'error': 'Scheduled time is required for booking'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse scheduled_time
+            from django.utils import timezone
+            from dateutil import parser as date_parser
+            try:
+                scheduled_dt = date_parser.parse(scheduled_time)
+                # Make timezone-aware if naive
+                if timezone.is_naive(scheduled_dt):
+                    scheduled_dt = timezone.make_aware(scheduled_dt)
+            except (ValueError, TypeError):
+                print(f"❌ Validation failed: Invalid scheduled_time format")
+                print(f"{'='*60}\n")
+                return Response(
+                    {'error': 'Invalid scheduled_time format. Use ISO 8601 format'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validation Rule 2: Scheduled time must be in future
+            now = timezone.now()
+            if scheduled_dt <= now:
+                print(f"❌ Validation failed: scheduled_time must be in the future")
+                print(f"{'='*60}\n")
+                return Response(
+                    {'error': 'Scheduled time must be in the future'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validation Rule 3: Minimum 30 minutes advance booking
+            min_advance = now + timedelta(minutes=30)
+            if scheduled_dt < min_advance:
+                print(f"❌ Validation failed: Booking must be at least 30 minutes in advance")
+                print(f"{'='*60}\n")
+                return Response(
+                    {'error': 'Bookings must be made at least 30 minutes in advance'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validation Rule 4: Check for double-bookings at same lot/time
+            lot_id = request.data.get('lot')
+            if lot_id:
+                # Get service duration (default 30 mins if not available)
+                service_name = request.data.get('service_type', 'Full Service')  # service_type now contains service_name
+                service_duration = 30  # Default duration in minutes
+                try:
+                    # Try to get service by name first (service_type field now contains the display name)
+                    service = CarWashService.objects.get(service_name=service_name)
+                    service_duration = service.estimated_duration
+                except CarWashService.DoesNotExist:
+                    # Fallback to service_type field for backward compatibility
+                    try:
+                        service = CarWashService.objects.get(service_type=service_name.lower())
+                        service_duration = service.estimated_duration
+                    except CarWashService.DoesNotExist:
+                        pass
+                
+                scheduled_end = scheduled_dt + timedelta(minutes=service_duration)
+                
+                # Check for overlapping bookings at same lot
+                conflicting_bookings = CarWashBooking.objects.filter(
+                    lot_id=lot_id,
+                    scheduled_time__lt=scheduled_end,
+                    status__in=['pending', 'confirmed', 'in_progress']  # Only active bookings
+                ).exclude(status='cancelled')
+                
+                # Check if any booking overlaps with new booking time
+                for booking in conflicting_bookings:
+                    if booking.scheduled_time:
+                        # Get actual service duration for existing booking
+                        booking_duration = 30  # Default
+                        try:
+                            booking_service = CarWashService.objects.get(service_name=booking.service_type)
+                            booking_duration = booking_service.estimated_duration
+                        except CarWashService.DoesNotExist:
+                            try:
+                                booking_service = CarWashService.objects.get(service_type=booking.service_type.lower())
+                                booking_duration = booking_service.estimated_duration
+                            except:
+                                pass
+                        
+                        booking_end = booking.scheduled_time + timedelta(minutes=booking_duration)
+                        # Check for overlap: two bookings overlap if one starts before the other ends AND one ends after the other starts
+                        # Booking A: [start_a, end_a), Booking B: [start_b, end_b)
+                        # Overlap exists if: start_a < end_b AND end_a > start_b
+                        if booking.scheduled_time < scheduled_end and booking_end > scheduled_dt:
+                            print(f"❌ Validation failed: Time slot conflict with booking {booking.carwash_booking_id}")
+                            print(f"   Existing booking: {booking.scheduled_time} to {booking_end}")
+                            print(f"   New booking: {scheduled_dt} to {scheduled_end}")
+                            print(f"{'='*60}\n")
+                            return Response(
+                                {
+                                    'error': f'Time slot not available. Conflict with booking {booking.carwash_booking_id}',
+                                    'conflict_booking_id': booking.carwash_booking_id,
+                                    'available_from': (booking_end).isoformat()
+                                },
+                                status=status.HTTP_409_CONFLICT
+                            )
+            
+            # All validations passed, proceed with creation
+            data = dict(request.data)
+            data['user'] = user_profile.id
+            
+            # Set payment_status based on payment method
+            # - UPI/CC: Auto-verify (instant payment assumed)
+            # - Cash: Pending (requires manual verification by owner)
+            payment_method = request.data.get('payment_method', 'Cash')
+            if 'payment_status' not in data:
+                if payment_method in ['UPI', 'CC']:
+                    data['payment_status'] = 'verified'  # Auto-verify online payments
+                    print(f"📋 Auto-verifying {payment_method} payment")
+                else:
+                    data['payment_status'] = 'pending'  # Cash needs manual verification
+                    print(f"📋 Cash payment set to pending (requires owner verification)")
+            
+            # Set default status if not provided  
+            if 'status' not in data:
+                data['status'] = 'pending'
+            
+            print(f"📋 Preparing data for serializer:")
+            print(f"   service_type: {data.get('service_type')}")
+            print(f"   lot: {data.get('lot')}")
+            print(f"   user: {data.get('user')}")
+            print(f"   price: {data.get('price')}")
+            print(f"   payment_method: {data.get('payment_method')}")
+            print(f"   payment_status: {data.get('payment_status')}")
+            print(f"   status: {data.get('status')}")
+            
+            serializer = self.get_serializer(data=data)
+            if not serializer.is_valid():
+                print(f"❌ Serializer validation failed:")
+                print(f"   Errors: {serializer.errors}")
+                print(f"{'='*60}\n")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            self.perform_create(serializer)
+            
+            print(f"✅ Car wash booking created: ID={serializer.data['carwash_booking_id']}")
+            print(f"✅ Validations passed: time={scheduled_dt}, lot={lot_id}")
+            print(f"{'='*60}\n")
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except UserProfile.DoesNotExist:
+            print(f"❌ User profile not found")
+            print(f"{'='*60}\n")
+            return Response(
+                {'error': 'User profile not found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            print(f"❌ Unexpected error creating booking: {str(e)}")
+            print(f"   Exception type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            print(f"{'='*60}\n")
+            return Response(
+                {'error': f'Error creating booking: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def perform_create(self, serializer):
+        """Save the car wash booking"""
+        serializer.save()
+    
+    def update(self, request, *args, **kwargs):
+        """
+        Update a car wash booking with status transition validation.
+        
+        Valid Status Transitions:
+        - pending → confirmed (payment verified)
+        - confirmed → in_progress (service started)
+        - in_progress → completed (service done)
+        - pending/confirmed/in_progress → cancelled (by user)
+        """
+        booking = self.get_object()
+        new_status = request.data.get('status')
+        
+        print(f"\n{'='*60}")
+        print(f"🔄 Updating car wash booking {booking.carwash_booking_id}")
+        print(f"   Current status: {booking.status}")
+        print(f"   New status: {new_status}")
+        
+        if new_status and new_status != booking.status:
+            # Validate status transition
+            valid_transitions = {
+                'pending': ['confirmed', 'cancelled'],
+                'confirmed': ['in_progress', 'cancelled'],
+                'in_progress': ['completed', 'cancelled'],
+                'completed': [],  # No transitions from completed
+                'cancelled': [],  # No transitions from cancelled
+            }
+            
+            allowed_next_states = valid_transitions.get(booking.status, [])
+            if new_status not in allowed_next_states:
+                print(f"❌ Invalid status transition: {booking.status} → {new_status}")
+                print(f"   Allowed transitions: {allowed_next_states}")
+                print(f"{'='*60}\n")
+                return Response(
+                    {
+                        'error': f'Invalid status transition from {booking.status} to {new_status}',
+                        'allowed_transitions': allowed_next_states
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Additional validation for specific transitions
+            if new_status == 'completed' and booking.payment_status != 'verified':
+                print(f"❌ Cannot complete booking: payment not verified")
+                print(f"{'='*60}\n")
+                return Response(
+                    {'error': 'Cannot complete booking until payment is verified'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if new_status == 'in_progress':
+                # Set started time
+                from django.utils import timezone
+                request.data._mutable = True
+                request.data['started_time'] = timezone.now().isoformat()
+            
+            if new_status == 'completed':
+                # Set completed time
+                from django.utils import timezone
+                request.data._mutable = True
+                request.data['completed_time'] = timezone.now().isoformat()
+            
+            print(f"✅ Valid transition allowed")
+        
+        # Perform the update
+        serializer = self.get_serializer(booking, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        print(f"✅ Booking updated successfully")
+        print(f"{'='*60}\n")
+        
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='my-bookings', permission_classes=[permissions.IsAuthenticated])
+    def my_bookings(self, request):
+        """Get all car wash bookings for the current user"""
+        try:
+            user_profile = UserProfile.objects.get(auth_user=request.user)
+            bookings = CarWashBooking.objects.filter(user=user_profile).order_by('-booking_time')
+            serializer = self.get_serializer(bookings, many=True)
+            
+            return Response({
+                'count': len(serializer.data),
+                'results': serializer.data
+            }, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=False, methods=['get'], url_path='pending-payments', permission_classes=[permissions.IsAuthenticated])
+    def pending_payments(self, request):
+        """Get car wash bookings with pending payment status"""
+        try:
+            user_profile = UserProfile.objects.get(auth_user=request.user)
+            bookings = CarWashBooking.objects.filter(
+                user=user_profile,
+                payment_status='pending'
+            ).order_by('-booking_time')
+            serializer = self.get_serializer(bookings, many=True)
+            
+            return Response({
+                'count': len(serializer.data),
+                'results': serializer.data
+            }, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class OwnerCarWashBookingViewSet(ModelViewSet):
+    """
+    ViewSet for owners to view car wash bookings for their lots.
+    Only owners can access car wash bookings for their own parking lots.
+    """
+    serializer_class = CarWashBookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Owners only see car wash bookings for their lots"""
+        user = self.request.user
+        try:
+            owner_profile = OwnerProfile.objects.get(auth_user=user)
+            # Get all lots owned by this owner
+            owner_lots = P_Lot.objects.filter(owner=owner_profile)
+            # Get all car wash bookings for these lots
+            return CarWashBooking.objects.filter(lot__in=owner_lots).order_by('-booking_time')
+        except OwnerProfile.DoesNotExist:
+            return CarWashBooking.objects.none()
+    
+    @action(detail=False, methods=['get'], url_path='dashboard', permission_classes=[permissions.IsAuthenticated])
+    def dashboard(self, request):
+        """
+        Get car wash dashboard stats for owner.
+        Includes total bookings, revenue, pending verifications, etc.
+        """
+        try:
+            owner_profile = OwnerProfile.objects.get(auth_user=request.user)
+            owner_lots = P_Lot.objects.filter(owner=owner_profile)
+            
+            bookings = CarWashBooking.objects.filter(lot__in=owner_lots)
+            total_bookings = bookings.count()
+            completed_bookings = bookings.filter(status='completed').count()
+            pending_payments = bookings.filter(payment_status='pending').count()
+            
+            # Calculate total revenue
+            total_revenue = 0
+            for booking in bookings.filter(status='completed', payment_status='verified'):
+                total_revenue += float(booking.price)
+            
+            return Response({
+                'total_bookings': total_bookings,
+                'completed_bookings': completed_bookings,
+                'pending_payments': pending_payments,
+                'total_revenue': total_revenue,
+            }, status=status.HTTP_200_OK)
+        except OwnerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Owner profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['patch'], url_path='verify-payment', permission_classes=[permissions.IsAuthenticated])
+    def verify_payment(self, request, pk=None):
+        """
+        Verify cash payment for a car wash booking.
+        Only works for Cash payments and changes payment_status from 'pending' to 'verified'.
+        
+        Permission: Only the owner of the lot can verify payments.
+        """
+        try:
+            # Check if booking exists
+            try:
+                booking = self.get_object()
+            except Exception as e:
+                return Response(
+                    {'error': 'Booking not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Security check: Verify owner owns this lot
+            owner_profile = OwnerProfile.objects.get(auth_user=request.user)
+            if booking.lot and booking.lot.owner != owner_profile:
+                return Response(
+                    {'error': 'You do not have permission to verify this booking'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Only Cash payments can be manually verified
+            if booking.payment_method != 'Cash':
+                return Response(
+                    {
+                        'error': f'Only Cash payments can be verified manually. This booking uses {booking.payment_method}',
+                        'payment_method': booking.payment_method
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if already verified
+            if booking.payment_status == 'verified':
+                return Response(
+                    {'message': 'Payment is already verified', 'payment_status': booking.payment_status},
+                    status=status.HTTP_200_OK
+                )
+            
+            # Mark payment as verified
+            booking.payment_status = 'verified'
+            booking.save()
+            
+            print(f"✅ Cash payment verified for booking {booking.carwash_booking_id}")
+            print(f"   User: {booking.user.firstname} {booking.user.lastname}")
+            print(f"   Amount: ₹{booking.price}")
+            
+            # Send WebSocket notification to user
+            try:
+                send_ws_notification(
+                    booking.user.auth_user.id,
+                    'success',
+                    f'Your car wash payment has been verified by the lot owner.'
+                )
+            except Exception as e:
+                print(f"⚠️ Could not send notification: {str(e)}")
+            
+            serializer = self.get_serializer(booking)
+            return Response(
+                {
+                    'message': 'Cash payment verified successfully',
+                    'booking': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except CarWashBooking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except OwnerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Owner profile not found'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        except Exception as e:
+            print(f"❌ Error verifying payment: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['patch'], url_path='confirm-booking', permission_classes=[permissions.IsAuthenticated])
+    def confirm_booking(self, request, pk=None):
+        """
+        Confirm a car wash booking.
+        Changes status from 'pending' to 'confirmed'.
+        Only allows confirmation if payment is verified.
+        
+        Permission: Only the owner of the lot can confirm bookings.
+        """
+        try:
+            # Check if booking exists
+            try:
+                booking = self.get_object()
+            except Exception as e:
+                return Response(
+                    {'error': 'Booking not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Security check: Verify owner owns this lot
+            owner_profile = OwnerProfile.objects.get(auth_user=request.user)
+            if booking.lot and booking.lot.owner != owner_profile:
+                return Response(
+                    {'error': 'You do not have permission to confirm this booking'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if payment is verified
+            if booking.payment_status != 'verified':
+                return Response(
+                    {
+                        'error': f'Cannot confirm booking. Payment status is {booking.payment_status}. Payment must be verified first.',
+                        'payment_status': booking.payment_status
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if already confirmed
+            if booking.status == 'confirmed':
+                return Response(
+                    {'message': 'Booking is already confirmed', 'status': booking.status},
+                    status=status.HTTP_200_OK
+                )
+            
+            # Mark booking as confirmed
+            old_status = booking.status
+            booking.status = 'confirmed'
+            booking.save()
+            
+            print(f"✅ Car wash booking confirmed: {booking.carwash_booking_id}")
+            print(f"   Status: {old_status} → confirmed")
+            print(f"   User: {booking.user.firstname} {booking.user.lastname}")
+            print(f"   Service: {booking.service_type}")
+            print(f"   Scheduled: {booking.scheduled_time}")
+            
+            # Send WebSocket notification to user
+            try:
+                send_ws_notification(
+                    booking.user.auth_user.id,
+                    'success',
+                    f'Your car wash booking has been confirmed! Scheduled for {booking.scheduled_time.strftime("%d %b %Y, %H:%M") if booking.scheduled_time else "TBD"}.'
+                )
+            except Exception as e:
+                print(f"⚠️ Could not send notification: {str(e)}")
+            
+            serializer = self.get_serializer(booking)
+            return Response(
+                {
+                    'message': 'Booking confirmed successfully',
+                    'booking': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except CarWashBooking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except OwnerProfile.DoesNotExist:
+            return Response(
+                {'error': 'Owner profile not found'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        except Exception as e:
+            print(f"❌ Error confirming booking: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

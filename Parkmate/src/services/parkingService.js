@@ -42,6 +42,13 @@ const parkingService = {
     return response.data;
   },
 
+  searchLots: async (query) => {
+    const response = await api.get('/lots/', {
+      params: { q: query }
+    });
+    return response.data;
+  },
+
   getLotById: async (id) => {
     const response = await api.get(`/lots/${id}/`);
     return response.data;
@@ -205,6 +212,79 @@ const parkingService = {
 
   createTask: async (taskData) => {
     const response = await api.post('/tasks/', taskData);
+    return response.data;
+  },
+
+  // ===== CAR WASH SERVICES =====
+  getCarWashServices: async () => {
+    const response = await api.get('/carwash-services/');
+    return response.data;
+  },
+
+  getCarWashServiceById: async (id) => {
+    const response = await api.get(`/carwash-services/${id}/`);
+    return response.data;
+  },
+
+  // ===== CAR WASH BOOKINGS =====
+  createCarWashBooking: async (bookingData) => {
+    const response = await api.post('/carwash-bookings/', bookingData);
+    return response.data;
+  },
+
+  getCarWashBookings: async () => {
+    const response = await api.get('/carwash-bookings/');
+    return response.data;
+  },
+
+  getCarWashBookingById: async (id) => {
+    const response = await api.get(`/carwash-bookings/${id}/`);
+    return response.data;
+  },
+
+  getUserCarWashBookings: async () => {
+    const response = await api.get('/carwash-bookings/my-bookings/');
+    return response.data;
+  },
+
+  getPendingCarWashPayments: async () => {
+    const response = await api.get('/carwash-bookings/pending-payments/');
+    return response.data;
+  },
+
+  updateCarWashBooking: async (id, bookingData) => {
+    const response = await api.patch(`/carwash-bookings/${id}/`, bookingData);
+    return response.data;
+  },
+
+  cancelCarWashBooking: async (id) => {
+    const response = await api.delete(`/carwash-bookings/${id}/`);
+    return response.data;
+  },
+
+  // ===== OWNER CAR WASH BOOKINGS =====
+  getOwnerCarWashBookings: async () => {
+    const response = await api.get('/owner/carwash-bookings/');
+    return response.data;
+  },
+
+  getOwnerCarWashDashboard: async () => {
+    const response = await api.get('/owner/carwash-bookings/dashboard/');
+    return response.data;
+  },
+
+  verifyCarWashPayment: async (bookingId) => {
+    const response = await api.patch(`/owner/carwash-bookings/${bookingId}/verify-payment/`);
+    return response.data;
+  },
+
+  confirmCarWashBooking: async (bookingId) => {
+    const response = await api.patch(`/owner/carwash-bookings/${bookingId}/confirm-booking/`);
+    return response.data;
+  },
+
+  updateCarWashBookingStatus: async (bookingId, status) => {
+    const response = await api.patch(`/owner/carwash-bookings/${bookingId}/`, { status });
     return response.data;
   },
 

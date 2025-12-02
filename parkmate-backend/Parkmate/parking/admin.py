@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (AuthUser, UserProfile, OwnerProfile, P_Lot, P_Slot, Booking,
                     Payment, Employee, Carwash_type, Carwash, Tasks, 
-                    Review,)
+                    Review, CarWashBooking, CarWashService)
 
 admin.site.register(AuthUser)
 admin.site.register(UserProfile)
@@ -15,3 +15,5 @@ admin.site.register(Carwash)
 admin.site.register(Tasks)
 admin.site.register(Employee)
 admin.site.register(Review)
+admin.site.register(CarWashService)
+admin.site.register(CarWashBooking)

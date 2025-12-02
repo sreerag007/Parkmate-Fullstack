@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import(
     AuthViewSet,UserProfileViewSet,OwnerProfileViewSet,P_LotVIewSet,P_SlotViewSet,BookingViewSet,
     PaymentViewSet,TasksViewSet,CarwashViewSet,CarwashTypeViewSet,
-    EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView,OwnerPaymentsView, ###
+    EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView,OwnerPaymentsView,
+    CarWashServiceViewSet, CarWashBookingViewSet, OwnerCarWashBookingViewSet,
 )
 
 router=DefaultRouter()
@@ -18,6 +19,12 @@ router.register(r'carwashes',CarwashViewSet,basename='carwash')
 router.register(r'carwashtypes',CarwashTypeViewSet,basename='carwashtype')
 router.register(r'employees',EmployeeViewSet,basename='employee')
 router.register(r'reviews',ReviewViewSet,basename='review')
+
+# Car Wash Service and Booking routes
+router.register(r'carwash-services', CarWashServiceViewSet, basename='carwash-service')
+router.register(r'carwash-bookings', CarWashBookingViewSet, basename='carwash-booking')
+router.register(r'owner/carwash-bookings', OwnerCarWashBookingViewSet, basename='owner-carwash-booking')
+
 #router.register(r'auth',AuthViewSet, basename='auth')
 auth_register_user=AuthViewSet.as_view({'post':'register_user'})
 auth_register_owner=AuthViewSet.as_view({'post':'register_owner'})
