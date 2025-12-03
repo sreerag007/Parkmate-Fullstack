@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
 import { notify } from '../../utils/notify.jsx'
@@ -12,6 +12,9 @@ const OwnerBookings = () => {
     const [filter, setFilter] = useState('all') // all, booked, completed, cancelled
     const [pendingPayments, setPendingPayments] = useState([])
     const [verifyingPayment, setVerifyingPayment] = useState(null)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const refreshIntervalRef = useRef(null)
 
     // Load bookings from backend
@@ -75,10 +78,63 @@ const OwnerBookings = () => {
         }
     }, [owner])
 
-    const filteredBookings = bookings.filter(b => {
-        if (filter === 'all') return true
-        return b.status === filter
-    })
+    const filteredBookings = useMemo(() => {
+        let filtered = bookings.filter(b => {
+            if (filter === 'all') return true
+            return b.status === filter
+        })
+
+        // Apply date filter (robust parsing of input `YYYY-MM-DD` to local dates)
+        if (dateFrom || dateTo) {
+            const parseDateInput = (s) => {
+                if (!s) return null
+                const parts = s.split('-')
+                if (parts.length !== 3) return null
+                const y = parseInt(parts[0], 10)
+                const m = parseInt(parts[1], 10) - 1
+                const d = parseInt(parts[2], 10)
+                return new Date(y, m, d)
+            }
+
+            const fromDate = dateFrom ? parseDateInput(dateFrom) : null
+            const toDate = dateTo ? parseDateInput(dateTo) : null
+            if (fromDate) fromDate.setHours(0, 0, 0, 0)
+            if (toDate) toDate.setHours(23, 59, 59, 999)
+
+            filtered = filtered.filter(b => {
+                const bookingDate = new Date(b.booking_time)
+                if (fromDate && bookingDate < fromDate) return false
+                if (toDate && bookingDate > toDate) return false
+                return true
+            })
+        }
+
+        // Apply search filter
+        const query = searchQuery.trim().toLowerCase()
+        if (query) {
+            filtered = filtered.filter(b => {
+                const userName = `${b.user_read?.firstname || ''} ${b.user_read?.lastname || ''}`.toLowerCase()
+                const lotName = (b.lot_detail?.lot_name || '').toLowerCase()
+                const slotId = (b.slot_read?.slot_id || '').toString().toLowerCase()
+                const vehicleNumber = (b.vehicle_number || '').toLowerCase()
+                const bookingId = (b.booking_id || '').toString().toLowerCase()
+                const location = (b.lot_detail?.locality || '').toLowerCase()
+                const paymentMethod = (b.payments?.[0]?.payment_method || b.payment_method || '').toLowerCase()
+                
+                return (
+                    userName.includes(query) ||
+                    lotName.includes(query) ||
+                    slotId.includes(query) ||
+                    vehicleNumber.includes(query) ||
+                    bookingId.includes(query) ||
+                    location.includes(query) ||
+                    paymentMethod.includes(query)
+                )
+            })
+        }
+
+        return filtered
+    }, [bookings, filter, searchQuery, dateFrom, dateTo])
 
     // Sort by recent
     const sortedBookings = [...filteredBookings].sort((a, b) => {
@@ -86,6 +142,13 @@ const OwnerBookings = () => {
         const dateB = new Date(b.booking_time || 0)
         return dateB - dateA
     })
+
+    // Filter pending payments based on current filters (so they respect date/search/status filters)
+    const filteredPendingPayments = useMemo(() => {
+        // Find pending payments that match the filtered bookings
+        const filteredBookingIds = new Set(filteredBookings.map(b => b.booking_id))
+        return pendingPayments.filter(payment => filteredBookingIds.has(payment.booking_id))
+    }, [filteredBookings, pendingPayments])
 
     const handleCancelBooking = async (bookingId) => {
         try {
@@ -176,7 +239,7 @@ const OwnerBookings = () => {
             </header>
 
             {/* Pending Payments Section */}
-            {pendingPayments.length > 0 && (
+            {filteredPendingPayments.length > 0 && (
                 <div style={{
                     background: '#fefce8',
                     border: '2px solid #f59e0b',
@@ -190,7 +253,7 @@ const OwnerBookings = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '20px' }}>⏳</span>
                         <h3 style={{ margin: 0, color: '#92400e', fontSize: '18px', fontWeight: '600' }}>
-                            {pendingPayments.length} Pending Cash Payment{pendingPayments.length > 1 ? 's' : ''}
+                            {filteredPendingPayments.length} Pending Cash Payment{filteredPendingPayments.length > 1 ? 's' : ''}
                         </h3>
                     </div>
                     <div style={{
@@ -198,7 +261,7 @@ const OwnerBookings = () => {
                         gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
                         gap: '12px'
                     }}>
-                        {pendingPayments.map(payment => (
+                        {filteredPendingPayments.map(payment => (
                             <div key={payment.pay_id} style={{
                                 background: '#fff',
                                 border: '1px solid #fed7aa',
@@ -261,6 +324,98 @@ const OwnerBookings = () => {
                 </div>
             )}
 
+            {/* Search Bar & Date Filters */}
+            <div style={{ marginBottom: '24px' }}>
+                <input
+                    type="text"
+                    placeholder="🔍 Search by customer name, lot, slot, vehicle, location, or payment method..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        fontSize: '14px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        transition: 'all 0.2s',
+                        fontFamily: 'inherit',
+                        marginBottom: '12px',
+                        boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '1', minWidth: '150px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 From Date</label>
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                fontSize: '14px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                fontFamily: 'inherit',
+                                boxSizing: 'border-box'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                        />
+                    </div>
+                    <div style={{ flex: '1', minWidth: '150px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 To Date</label>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                fontSize: '14px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                fontFamily: 'inherit',
+                                boxSizing: 'border-box'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                        />
+                    </div>
+                    {(dateFrom || dateTo) && (
+                        <button
+                            onClick={() => {
+                                setDateFrom('')
+                                setDateTo('')
+                            }}
+                            style={{
+                                padding: '10px 14px',
+                                background: '#ef4444',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                            onMouseOver={(e) => e.target.style.background = '#dc2626'}
+                            onMouseOut={(e) => e.target.style.background = '#ef4444'}
+                        >
+                            ✕ Clear Dates
+                        </button>
+                    )}
+                </div>
+            </div>
+
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button 
                     className={`filter-btn ${filter === 'all' ? 'active' : ''}`} 
@@ -276,7 +431,7 @@ const OwnerBookings = () => {
                         transition: 'all 0.2s'
                     }}
                 >
-                    All ({bookings.length})
+                    All ({filteredBookings.length})
                 </button>
                 <button 
                     className={`filter-btn ${filter === 'booked' ? 'active' : ''}`} 
@@ -291,7 +446,7 @@ const OwnerBookings = () => {
                         fontWeight: filter === 'booked' ? '600' : '500'
                     }}
                 >
-                    Booked ({bookings.filter(b => b.status?.toLowerCase() === 'booked').length})
+                    Booked ({filteredBookings.filter(b => b.status?.toLowerCase() === 'booked').length})
                 </button>
                 <button 
                     className={`filter-btn ${filter === 'completed' ? 'active' : ''}`} 
@@ -306,7 +461,7 @@ const OwnerBookings = () => {
                         fontWeight: filter === 'completed' ? '600' : '500'
                     }}
                 >
-                    Completed ({bookings.filter(b => b.status?.toLowerCase() === 'completed').length})
+                    Completed ({filteredBookings.filter(b => b.status?.toLowerCase() === 'completed').length})
                 </button>
                 <button 
                     className={`filter-btn ${filter === 'cancelled' ? 'active' : ''}`} 
@@ -321,7 +476,7 @@ const OwnerBookings = () => {
                         fontWeight: filter === 'cancelled' ? '600' : '500'
                     }}
                 >
-                    Cancelled ({bookings.filter(b => b.status?.toLowerCase() === 'cancelled').length})
+                    Cancelled ({filteredBookings.filter(b => b.status?.toLowerCase() === 'cancelled').length})
                 </button>
             </div>
 
@@ -356,6 +511,7 @@ const OwnerBookings = () => {
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Slot</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Vehicle</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Booking Date</th>
+                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Method</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Status</th>
                                     <th style={{ padding: '16px', textAlign: 'center', fontWeight: '600', color: '#0f172a' }}>Actions</th>
                                 </tr>
@@ -382,6 +538,18 @@ const OwnerBookings = () => {
                                         </td>
                                         <td style={{ padding: '16px', color: '#64748b' }}>
                                             {new Date(b.booking_time).toLocaleDateString()}
+                                        </td>
+                                        <td style={{ padding: '16px' }}>
+                                            <span style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '600',
+                                                backgroundColor: (b.payments?.[0]?.payment_method || b.payment_method) === 'UPI' ? '#dbeafe' : (b.payments?.[0]?.payment_method || b.payment_method) === 'Cash' ? '#fef3c7' : (b.payments?.[0]?.payment_method || b.payment_method) === 'CC' ? '#f3e8ff' : '#e0e7ff',
+                                                color: (b.payments?.[0]?.payment_method || b.payment_method) === 'UPI' ? '#1e40af' : (b.payments?.[0]?.payment_method || b.payment_method) === 'Cash' ? '#92400e' : (b.payments?.[0]?.payment_method || b.payment_method) === 'CC' ? '#6b21a8' : '#3730a3'
+                                            }}>
+                                                {b.payments?.[0]?.payment_method || b.payment_method || 'N/A'}
+                                            </span>
                                         </td>
                                         <td style={{ padding: '16px' }}>
                                             <span style={{

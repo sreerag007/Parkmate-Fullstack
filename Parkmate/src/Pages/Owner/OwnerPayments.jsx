@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
 import { notify } from '../../utils/notify.jsx'
@@ -64,16 +64,19 @@ const OwnerPayments = () => {
     const [error, setError] = useState(null)
     const [statusFilter, setStatusFilter] = useState('all')
     const [methodFilter, setMethodFilter] = useState('all')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const refreshIntervalRef = useRef(null)
 
-    // Calculate summary statistics
-    const calculateSummary = () => {
-        const successPayments = payments.filter(p => p.status === 'SUCCESS')
-        const pendingPayments = payments.filter(p => p.status === 'PENDING')
+    // Calculate summary statistics from filtered payments
+    const calculateSummary = (data) => {
+        const successPayments = data.filter(p => p.status === 'SUCCESS')
+        const pendingPayments = data.filter(p => p.status === 'PENDING')
         
         const totalRevenue = successPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
         const pendingCount = pendingPayments.length
-        const totalTransactions = payments.length
+        const totalTransactions = data.length
 
         return {
             totalRevenue: totalRevenue.toFixed(2),
@@ -150,7 +153,69 @@ const OwnerPayments = () => {
         }
     }
 
-    const summary = calculateSummary()
+    // Calculate filtered payments - MUST be before any conditional returns
+    const filteredPayments = useMemo(() => {
+        let filtered = payments.filter(p => {
+            if (statusFilter !== 'all' && p.status !== statusFilter) return false
+            if (methodFilter !== 'all' && p.payment_method !== methodFilter) return false
+            return true
+        })
+
+        // Apply date filter (robust parsing of input `YYYY-MM-DD` to local dates)
+        if (dateFrom || dateTo) {
+            const parseDateInput = (s) => {
+                if (!s) return null
+                const parts = s.split('-')
+                if (parts.length !== 3) return null
+                const y = parseInt(parts[0], 10)
+                const m = parseInt(parts[1], 10) - 1
+                const d = parseInt(parts[2], 10)
+                return new Date(y, m, d)
+            }
+
+            const fromDate = dateFrom ? parseDateInput(dateFrom) : null
+            const toDate = dateTo ? parseDateInput(dateTo) : null
+            if (fromDate) fromDate.setHours(0, 0, 0, 0)
+            if (toDate) toDate.setHours(23, 59, 59, 999)
+
+            filtered = filtered.filter(p => {
+                const paymentDate = new Date(p.created_at)
+                if (fromDate && paymentDate < fromDate) return false
+                if (toDate && paymentDate > toDate) return false
+                return true
+            })
+        }
+
+        // Apply search filter
+        const query = searchQuery.trim().toLowerCase()
+        if (query) {
+            filtered = filtered.filter(p => {
+                const userName = (p.user_name || '').toLowerCase()
+                const lotName = (p.lot_name || '').toLowerCase()
+                const slotNumber = (p.slot_number || '').toString().toLowerCase()
+                const paymentMethod = (p.payment_method || '').toLowerCase()
+                const amount = (p.amount || '').toString().toLowerCase()
+                const transactionId = (p.transaction_id || '').toString().toLowerCase()
+                const status = (p.status || '').toLowerCase()
+                const paymentType = (p.payment_type || '').toLowerCase()
+                
+                return (
+                    userName.includes(query) ||
+                    lotName.includes(query) ||
+                    slotNumber.includes(query) ||
+                    paymentMethod.includes(query) ||
+                    amount.includes(query) ||
+                    transactionId.includes(query) ||
+                    status.includes(query) ||
+                    paymentType.includes(query)
+                )
+            })
+        }
+
+        return filtered
+    }, [payments, statusFilter, methodFilter, searchQuery, dateFrom, dateTo])
+
+    const summary = calculateSummary(filteredPayments)
 
     if (loading) {
         return (
@@ -171,12 +236,6 @@ const OwnerPayments = () => {
             </div>
         )
     }
-
-    const filteredPayments = payments.filter(p => {
-        if (statusFilter !== 'all' && p.status !== statusFilter) return false
-        if (methodFilter !== 'all' && p.payment_method !== methodFilter) return false
-        return true
-    })
 
     return (
         <div className="owner-payments">
@@ -276,6 +335,98 @@ const OwnerPayments = () => {
                     <p style={{ ...fontStyles.bodySM, margin: 0, color: '#4b5563' }}>
                         Payment records
                     </p>
+                </div>
+            </div>
+
+            {/* Search Bar & Date Filters */}
+            <div style={{ marginBottom: '24px' }}>
+                <input
+                    type="text"
+                    placeholder="🔍 Search by customer name, lot, slot, payment method, amount, or transaction ID..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        fontSize: '14px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        transition: 'all 0.2s',
+                        fontFamily: 'inherit',
+                        marginBottom: '12px',
+                        boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '1', minWidth: '150px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 From Date</label>
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                fontSize: '14px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                fontFamily: 'inherit',
+                                boxSizing: 'border-box'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                        />
+                    </div>
+                    <div style={{ flex: '1', minWidth: '150px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 To Date</label>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                fontSize: '14px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                fontFamily: 'inherit',
+                                boxSizing: 'border-box'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                        />
+                    </div>
+                    {(dateFrom || dateTo) && (
+                        <button
+                            onClick={() => {
+                                setDateFrom('')
+                                setDateTo('')
+                            }}
+                            style={{
+                                padding: '10px 14px',
+                                background: '#ef4444',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                            onMouseOver={(e) => e.target.style.background = '#dc2626'}
+                            onMouseOut={(e) => e.target.style.background = '#ef4444'}
+                        >
+                            ✕ Clear Dates
+                        </button>
+                    )}
                 </div>
             </div>
 
