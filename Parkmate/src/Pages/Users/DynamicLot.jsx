@@ -37,6 +37,8 @@ const DynamicLot = () => {
     const [selected, setSelected] = useState(null);
     const [payment, setPayment] = useState('CC');
     const [vehicleType, setVehicleType] = useState('Hatchback');
+    const [userVehicleType, setUserVehicleType] = useState(null); // User's registered vehicle type
+    const [showAllSlots, setShowAllSlots] = useState(false); // Toggle to show all or only compatible slots
     const [bookingType, setBookingType] = useState('Instant');
     const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
@@ -101,6 +103,16 @@ const DynamicLot = () => {
                 setError(null);
 
                 console.log('🔍 Loading data for lot ID:', lotId);
+
+                // Fetch user profile to get vehicle type
+                try {
+                    const userProfile = await parkingService.getUserProfile();
+                    console.log('🚗 User vehicle type:', userProfile.vehicle_type);
+                    setUserVehicleType(userProfile.vehicle_type);
+                    setVehicleType(userProfile.vehicle_type); // Set default vehicle type to user's
+                } catch (err) {
+                    console.error('⚠️ Could not fetch user vehicle type:', err);
+                }
 
                 // Fetch lot details
                 const lot = await parkingService.getLotById(lotId);
@@ -400,17 +412,55 @@ const DynamicLot = () => {
 
             <p className="lot-desc">Select an available slot below. Bookings last 1 hour and will expire automatically.</p>
 
+            {userVehicleType && (
+                <div style={{ 
+                    padding: '12px 16px', 
+                    background: '#f0f9ff', 
+                    borderRadius: '8px', 
+                    marginBottom: '16px',
+                    border: '1px solid #0ea5e9'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <strong>🚗 Your Vehicle:</strong> {userVehicleType}
+                            {!showAllSlots && <span style={{ marginLeft: '8px', color: '#0ea5e9' }}>• Showing compatible slots only</span>}
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={showAllSlots} 
+                                onChange={(e) => setShowAllSlots(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            Show all slots
+                        </label>
+                    </div>
+                </div>
+            )}
+
             <div className="slots-grid">
                 {slots.length === 0 ? (
                     <p>No slots available for this lot.</p>
                 ) : (
-                    slots.map((s) => {
+                    slots
+                        .filter(s => {
+                            // Filter by vehicle type if user has one and showAllSlots is false
+                            if (userVehicleType && !showAllSlots) {
+                                return s.vehicleType === userVehicleType;
+                            }
+                            return true;
+                        })
+                        .map((s) => {
                         // ✅ Calculate remaining time from backend end_time instead of local bookedAt
                         let remaining = null;
                         let isExpired = false;
                         let isCancelledOrCompleted = false;
                         let displayStatus = 'available';
                         let statusLabel = `Available - ₹${s.price}/hr`;
+                        
+                        // Check vehicle compatibility
+                        const isCompatible = !userVehicleType || s.vehicleType === userVehicleType;
+                        const vehicleTypeLabel = s.vehicleType ? ` (${s.vehicleType})` : '';
                         
                         // 🔥 PRIMARY CHECK: If there's a booking object, the slot is occupied
                         if (s.booking && s.booking.end_time) {
@@ -450,17 +500,24 @@ const DynamicLot = () => {
                         const isBooked = (displayStatus === 'booked' || displayStatus === 'scheduled');
                         const displayAsAvailable = !isBooked;
                         
+                        // Disable slot if booked OR incompatible vehicle type
+                        const isDisabled = isBooked || !isCompatible;
+                        
                         return (
                             <button
                                 key={s.id}
-                                className={`slot ${displayStatus} ${selected === s.id && displayAsAvailable ? 'selected' : ''}`}
-                                onClick={() => selectSlot(s.id)}
-                                disabled={isBooked}
-                                title={`Slot #${s.slotNumber} - ${displayStatus.toUpperCase()}`}
+                                className={`slot ${displayStatus} ${selected === s.id && displayAsAvailable && isCompatible ? 'selected' : ''} ${!isCompatible ? 'incompatible' : ''}`}
+                                onClick={() => isCompatible && selectSlot(s.id)}
+                                disabled={isDisabled}
+                                title={`Slot #${s.slotNumber} - ${displayStatus.toUpperCase()}${vehicleTypeLabel}${!isCompatible ? ' - Incompatible with your vehicle' : ''}`}
                             >
-                                <div className="slot-id">#{s.slotNumber}</div>
+                                <div className="slot-id">
+                                    #{s.slotNumber}
+                                    {!isCompatible && <span style={{ marginLeft: '4px', fontSize: '10px' }}>🚫</span>}
+                                </div>
                                 <div className="slot-state">
                                     {statusLabel}
+                                    {!isCompatible && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>{s.vehicleType}</div>}
                                 </div>
                             </button>
                         );

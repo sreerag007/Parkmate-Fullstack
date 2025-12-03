@@ -290,6 +290,57 @@
   color: #991b1b;
 }
 
+/* Payment Method Badge */
+.payment-method-badge {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.payment-method-badge.upi {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.payment-method-badge.cash {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.payment-method-badge.cc {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+/* Transaction ID Display */
+.transaction-id {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: #475569;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.transaction-id:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.no-transaction {
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
 /* Actions */
 .actions {
   white-space: nowrap;

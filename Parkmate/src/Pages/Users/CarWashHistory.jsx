@@ -16,14 +16,32 @@ const CarWashHistory = () => {
     const fetchBookings = async () => {
       try {
         setLoading(true)
+        console.log('🔍 Fetching car wash bookings for user:', user)
         const response = await parkingService.getUserCarWashBookings()
+        console.log('✅ Car wash bookings response:', response)
         if (response) {
           console.log('📋 User car wash bookings:', response)
           setBookings(response.results || response)
         }
       } catch (error) {
-        console.error('Error fetching bookings:', error)
-        toast.error('Failed to load car wash bookings')
+        console.error('❌ Error fetching bookings:', error)
+        console.error('❌ Error details:', {
+          message: error.message,
+          response: error.response,
+          request: error.request,
+          config: error.config
+        })
+        
+        if (error.response) {
+          // Server responded with error status
+          toast.error(`Failed to load bookings: ${error.response.status} ${error.response.statusText}`)
+        } else if (error.request) {
+          // Request was made but no response
+          toast.error('No response from server. Please check your connection.')
+        } else {
+          // Something else happened
+          toast.error('Failed to load car wash bookings')
+        }
       } finally {
         setLoading(false)
       }
@@ -31,6 +49,9 @@ const CarWashHistory = () => {
 
     if (user) {
       fetchBookings()
+    } else {
+      console.warn('⚠️ User not logged in, skipping car wash bookings fetch')
+      setLoading(false)
     }
   }, [user])
 

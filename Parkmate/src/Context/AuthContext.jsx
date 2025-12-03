@@ -178,6 +178,8 @@ export const AuthProvider = ({ children }) => {
             console.error('Logout error:', error);
         } finally {
             setUser(null);
+            setOwner(null);
+            setAdmin(null);
         }
     };
 
@@ -239,7 +241,9 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
+            setUser(null);
             setOwner(null);
+            setAdmin(null);
         }
     };
 
@@ -293,6 +297,8 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
+            setUser(null);
+            setOwner(null);
             setAdmin(null);
         }
     };

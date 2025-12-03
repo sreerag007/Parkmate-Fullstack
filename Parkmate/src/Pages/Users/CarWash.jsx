@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
+import PaymentModal from '../../Components/PaymentModal'
 import { Droplets, Sparkles, Wind, Star } from 'lucide-react'
 import { toast } from 'react-toastify'
 import './CarWash.css'
@@ -15,13 +16,17 @@ const CarWash = () => {
   const [bookingData, setBookingData] = useState({
     service_type: '',
     lot: null,
+    scheduled_date: '',
     scheduled_time: '',
     notes: '',
     payment_method: 'UPI',
   })
   const [lots, setLots] = useState([])
+  const [timeSlots, setTimeSlots] = useState([])
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState(null)
   const [step, setStep] = useState('select') // 'select', 'details', 'payment'
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
   // Fetch available car wash services
   useEffect(() => {
@@ -63,6 +68,33 @@ const CarWash = () => {
     }
   }, [user])
 
+  // Fetch time slots when date and lot are selected
+  useEffect(() => {
+    const fetchTimeSlots = async () => {
+      if (!bookingData.scheduled_date || !bookingData.lot) {
+        setTimeSlots([])
+        return
+      }
+
+      try {
+        console.log('🔍 Fetching time slots for:', bookingData.scheduled_date, 'Lot:', bookingData.lot)
+        const response = await parkingService.getCarWashTimeSlots(
+          bookingData.scheduled_date,
+          bookingData.lot
+        )
+        console.log('✅ Time slots received:', response)
+        if (response && response.slots) {
+          setTimeSlots(response.slots)
+        }
+      } catch (error) {
+        console.error('❌ Error fetching time slots:', error)
+        toast.error('Failed to load available time slots')
+      }
+    }
+
+    fetchTimeSlots()
+  }, [bookingData.scheduled_date, bookingData.lot])
+
   // Get icon for service type
   const getServiceIcon = (serviceType) => {
     switch (serviceType) {
@@ -96,11 +128,59 @@ const CarWash = () => {
       ...bookingData,
       [name]: value,
     })
+    
+    // Clear selected time slot if date or lot changes
+    if (name === 'scheduled_date' || name === 'lot') {
+      setSelectedTimeSlot(null)
+      setBookingData(prev => ({ ...prev, scheduled_time: '' }))
+    }
+  }
+
+  // Handle time slot selection
+  const handleTimeSlotSelect = (slot) => {
+    if (!slot.available) {
+      toast.warning(`This time slot is full (${slot.booked_count}/${slot.capacity} booked)`)
+      return
+    }
+    
+    setSelectedTimeSlot(slot)
+    // Combine date and time into ISO format
+    const scheduledDateTime = `${bookingData.scheduled_date}T${slot.time}:00`
+    setBookingData({
+      ...bookingData,
+      scheduled_time: scheduledDateTime,
+    })
+  }
+
+  // Handle payment method change
+  const handlePaymentMethodChange = (method) => {
+    setBookingData({
+      ...bookingData,
+      payment_method: method,
+    })
+  }
+
+  // Proceed to payment
+  const handleProceedToPayment = () => {
+    if (!bookingData.lot) {
+      toast.error('Please select a parking lot')
+      return
+    }
+    if (!bookingData.scheduled_date) {
+      toast.error('Please select a date')
+      return
+    }
+    if (!selectedTimeSlot) {
+      toast.error('Please select a time slot')
+      return
+    }
+    
+    // Always show payment modal - let user choose payment method there
+    setShowPaymentModal(true)
   }
 
   // Handle booking submission
-  const handleBookCarWash = async (e) => {
-    e.preventDefault()
+  const handleBookCarWash = async (paymentData = null) => {
 
     if (!user) {
       toast.error('Please login to book a car wash')
@@ -116,14 +196,26 @@ const CarWash = () => {
     try {
       setIsSubmitting(true)
 
+      // Extract payment method from paymentData
+      const paymentMethod = paymentData?.payment_method || bookingData.payment_method || 'UPI'
+
       // Prepare booking payload
       const payload = {
         service_type: bookingData.service_type,
         lot: bookingData.lot || null,
         scheduled_time: bookingData.scheduled_time,
         notes: bookingData.notes || '',
-        payment_method: bookingData.payment_method,
+        payment_method: paymentMethod,
         price: selectedService.base_price,
+      }
+      
+      // Add payment details if provided (from payment modal)
+      if (paymentData) {
+        if (paymentData.transactionId) {
+          payload.payment_reference = paymentData.transactionId
+        } else if (paymentData.upiId) {
+          payload.payment_reference = paymentData.upiId
+        }
       }
 
       console.log('📋 Booking car wash with payload:', payload)
@@ -133,23 +225,24 @@ const CarWash = () => {
 
       if (response) {
         console.log('✅ Car wash booking created:', response)
+        setShowPaymentModal(false)
         toast.success(`Car wash booking confirmed! Booking ID: ${response.carwash_booking_id}`)
 
         // Reset form
-        setSelectedService(null)
         setBookingData({
           service_type: '',
           lot: null,
+          scheduled_date: '',
           scheduled_time: '',
           notes: '',
           payment_method: 'UPI',
         })
+        setSelectedService(null)
+        setSelectedTimeSlot(null)
         setStep('select')
 
-        // Redirect to confirmation or booking history
-        setTimeout(() => {
-          navigate('/carwash/my-bookings')
-        }, 2000)
+        // Navigate to user's bookings page
+        setTimeout(() => navigate('/carwash/my-bookings'), 1500)
       }
     } catch (error) {
       console.error('Error booking car wash:', error)
@@ -256,27 +349,16 @@ const CarWash = () => {
             <h2>Book {selectedService?.service_name}</h2>
           </div>
 
-          <form onSubmit={handleBookCarWash} className="booking-form">
+          <form className="booking-form">
             <div className="form-section">
-              <label>Scheduled Date & Time *</label>
-              <input
-                type="datetime-local"
-                name="scheduled_time"
-                value={bookingData.scheduled_time}
-                onChange={handleInputChange}
-                min={new Date().toISOString().slice(0, 16)}
-                required
-              />
-            </div>
-
-            <div className="form-section">
-              <label>Parking Lot (Optional)</label>
+              <label>Parking Lot *</label>
               <select
                 name="lot"
                 value={bookingData.lot || ''}
                 onChange={handleInputChange}
+                required
               >
-                <option value="">Select a lot (optional)</option>
+                <option value="">Select a parking lot</option>
                 {lots.map((lot) => (
                   <option key={lot.lot_id} value={lot.lot_id}>
                     {lot.lot_name} - {lot.city}
@@ -286,76 +368,120 @@ const CarWash = () => {
             </div>
 
             <div className="form-section">
-              <label>Payment Method *</label>
-              <select
-                name="payment_method"
-                value={bookingData.payment_method}
+              <label>Select Date *</label>
+              <input
+                type="date"
+                name="scheduled_date"
+                value={bookingData.scheduled_date}
                 onChange={handleInputChange}
+                min={new Date().toISOString().split('T')[0]}
                 required
-              >
-                <option value="UPI">UPI</option>
-                <option value="CC">Credit Card</option>
-                <option value="Cash">Cash</option>
-              </select>
+              />
             </div>
 
+            {/* Debug info */}
+            {console.log('🔍 Debug - Lot:', bookingData.lot, 'Date:', bookingData.scheduled_date, 'Slots:', timeSlots.length)}
+
+            {bookingData.scheduled_date && bookingData.lot ? (
+              <div className="form-section">
+                <label>Select Time Slot * (9 AM - 8 PM)</label>
+                <div className="time-slots-grid">
+                  {timeSlots.length === 0 ? (
+                    <p className="loading-slots">Loading time slots...</p>
+                  ) : (
+                    timeSlots.map((slot) => (
+                      <button
+                        key={slot.time}
+                        type="button"
+                        className={`time-slot ${
+                          selectedTimeSlot?.time === slot.time ? 'selected' : ''
+                        } ${!slot.available ? 'disabled' : ''}`}
+                        onClick={() => handleTimeSlotSelect(slot)}
+                        disabled={!slot.available}
+                      >
+                        <div className="slot-time">{slot.time}</div>
+                        {slot.booked_count > 0 && (
+                          <div className="slot-badge">
+                            {slot.booked_count}/{slot.capacity}
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="slot-legend">
+                  <div className="legend-item">
+                    <span className="legend-box available"></span> Available
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-box partial"></span> Partially Booked
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-box full"></span> Full
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="form-section">
+                <p style={{textAlign: 'center', color: '#6b7280', padding: '2rem', background: '#f9fafb', borderRadius: '12px', fontSize: '0.95rem'}}>
+                  📅 Please select a parking lot and date to view available time slots
+                </p>
+              </div>
+            )}
+
             <div className="form-section">
-              <label>Special Requests / Notes</label>
+              <label>Additional Notes (Optional)</label>
               <textarea
                 name="notes"
                 value={bookingData.notes}
                 onChange={handleInputChange}
-                placeholder="Any special instructions for the car wash..."
-                rows="4"
+                placeholder="Any special requirements or instructions..."
+                rows="3"
               />
             </div>
 
             <div className="booking-summary">
               <h3>Booking Summary</h3>
-              <div className="summary-item">
+              <div className="summary-row">
                 <span>Service:</span>
-                <strong>{selectedService?.service_name}</strong>
+                <span>{selectedService?.service_name}</span>
               </div>
-              <div className="summary-item">
-                <span>Price:</span>
-                <strong>₹{selectedService?.base_price}</strong>
+              <div className="summary-row">
+                <span>Date:</span>
+                <span>{bookingData.scheduled_date || '-'}</span>
               </div>
-              <div className="summary-item">
-                <span>Duration:</span>
-                <strong>{selectedService?.estimated_duration} minutes</strong>
+              <div className="summary-row">
+                <span>Time:</span>
+                <span>{selectedTimeSlot?.time || '-'}</span>
               </div>
-              <div className="summary-item">
-                <span>Scheduled:</span>
-                <strong>
-                  {bookingData.scheduled_time
-                    ? new Date(bookingData.scheduled_time).toLocaleString()
-                    : 'Not selected'}
-                </strong>
+              <div className="summary-row total">
+                <span>Total Amount:</span>
+                <span>₹{selectedService?.base_price}</span>
               </div>
             </div>
 
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn-cancel"
-                onClick={() => {
-                  setStep('select')
-                  setSelectedService(null)
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn-submit"
-                disabled={isSubmitting || !bookingData.scheduled_time}
-              >
-                {isSubmitting ? 'Booking...' : 'Confirm Booking'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleProceedToPayment}
+              className="submit-btn"
+              disabled={isSubmitting || !selectedTimeSlot}
+            >
+              {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
+            </button>
           </form>
         </div>
       ) : null}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          price={selectedService?.base_price}
+          purpose="carwash"
+          onConfirm={handleBookCarWash}
+        />
+      )}
     </div>
   )
 }

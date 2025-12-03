@@ -247,6 +247,13 @@ const parkingService = {
     return response.data;
   },
 
+  getCarWashTimeSlots: async (date, lotId = null) => {
+    const params = { date };
+    if (lotId) params.lot_id = lotId;
+    const response = await api.get('/carwash-bookings/available_time_slots/', { params });
+    return response.data;
+  },
+
   getPendingCarWashPayments: async () => {
     const response = await api.get('/carwash-bookings/pending-payments/');
     return response.data;

@@ -5,6 +5,7 @@ from .views import(
     PaymentViewSet,TasksViewSet,CarwashViewSet,CarwashTypeViewSet,
     EmployeeViewSet,ReviewViewSet,VerifyCashPaymentView,OwnerPaymentsView,
     CarWashServiceViewSet, CarWashBookingViewSet, OwnerCarWashBookingViewSet,
+    user_booked_lots,
 )
 
 router=DefaultRouter()
@@ -43,4 +44,7 @@ urlpatterns = [
     
     path('owner/payments/<str:payment_id>/verify/', VerifyCashPaymentView.as_view(), name='verify-cash-payment'),
     path('owner/payments/', OwnerPaymentsView.as_view(), name='owner-payments'),
+    
+    # User booked lots endpoint for review form
+    path('user-booked-lots/', user_booked_lots, name='user-booked-lots'),
 ]

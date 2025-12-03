@@ -34,6 +34,7 @@ class UserRegisterSerializer(serializers.Serializer):
     phone = serializers.CharField()
     vehicle_number = serializers.CharField()
     vehicle_type = serializers.ChoiceField(choices=VEHICLE_CHOICES)
+    driving_license = serializers.ImageField(required=False, allow_null=True)
 
     def validate_username(self, value):
         if AuthUser.objects.filter(username=value).exists():
@@ -49,6 +50,7 @@ class UserRegisterSerializer(serializers.Serializer):
         username = validated_data.pop("username")
         email = validated_data.pop("email")
         password = validated_data.pop("password")  # Extract auth fields
+        driving_license = validated_data.pop("driving_license", None)  # Extract optional field
 
         user = AuthUser.objects.create_user(
             username=username,
@@ -64,6 +66,7 @@ class UserRegisterSerializer(serializers.Serializer):
             phone=validated_data.pop("phone"),
             vehicle_number=validated_data.pop("vehicle_number"),
             vehicle_type=validated_data.pop("vehicle_type"),
+            driving_license=driving_license,  # Save driving license image
         )
         return user
 
@@ -147,19 +150,24 @@ class LoginSerializer(serializers.Serializer):
 # Profiles
 class UserProfileSerializer(serializers.ModelSerializer):
     auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+    username = serializers.CharField(source='auth_user.username', read_only=True)
 
     class Meta:
         model = UserProfile
         fields = [
             "id",
             "auth_user",
+            "username",
             "firstname",
             "lastname",
             "phone",
             "vehicle_number",
             "vehicle_type",
+            "driving_license",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ["id", "auth_user"]
+        read_only_fields = ["id", "auth_user", "username", "created_at", "updated_at"]
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -169,12 +177,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class OwnerProfileSerializer(serializers.ModelSerializer):
     auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+    username = serializers.CharField(source='auth_user.username', read_only=True)
 
     class Meta:
         model = OwnerProfile
         fields = [
             "id",
             "auth_user",
+            "username",
             "firstname",
             "lastname",
             "phone",
@@ -185,10 +195,15 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
             "pincode",
             "verification_status",
             "verification_document_image",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
             "id",
             "auth_user",
+            "username",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -378,6 +393,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "lot",
             "lot_detail",
             "vehicle_number",
+            "vehicle_type",
             "booking_type",
             "booking_time",
             "start_time",
@@ -392,7 +408,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "total_amount",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment", "payments", "total_amount"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment", "payments", "total_amount"]
 
     def get_lot_detail(self, obj):
         """Get lot details from the slot"""

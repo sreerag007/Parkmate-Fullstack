@@ -12,8 +12,10 @@ const UserRegister = () => {
         password: '',
         phone: '',
         vehicle_number: '',
-        vehicle_type: 'Sedan'
+        vehicle_type: 'Sedan',
+        driving_license: null
     })
+    const [drivingLicensePreview, setDrivingLicensePreview] = useState(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const { registerUser, loginUser } = useAuth()
@@ -24,13 +26,53 @@ const UserRegister = () => {
         setFormData(prev => ({ ...prev, [name]: value }))
     }
 
+    const handleDrivingLicenseChange = (e) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                setError('Please upload a valid image file')
+                return
+            }
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                setError('File size must be less than 5MB')
+                return
+            }
+            setError('')
+            setFormData(prev => ({ ...prev, driving_license: file }))
+            
+            // Create preview
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                setDrivingLicensePreview(reader.result)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    const removeDrivingLicense = () => {
+        setFormData(prev => ({ ...prev, driving_license: null }))
+        setDrivingLicensePreview(null)
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
         setLoading(true)
 
         try {
-            const result = await registerUser(formData)
+            // Create FormData for multipart upload
+            const form = new FormData()
+            Object.keys(formData).forEach(key => {
+                if (key === 'driving_license' && formData[key]) {
+                    form.append('driving_license', formData[key])
+                } else if (key !== 'driving_license') {
+                    form.append(key, formData[key])
+                }
+            })
+
+            const result = await registerUser(form)
             
             if (result.success) {
                 // Auto-login after successful registration
@@ -183,6 +225,89 @@ const UserRegister = () => {
                                 <option value="Two-Wheeler">Two-Wheeler</option>
                                 <option value="Three-Wheeler">Three-Wheeler</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            🪪 Driving License <span style={{ color: '#ef4444', fontWeight: 'bold' }}>*</span>
+                        </label>
+                        {drivingLicensePreview ? (
+                            <div style={{
+                                position: 'relative',
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                border: '2px solid #10b981',
+                                backgroundColor: '#f0fdf4'
+                            }}>
+                                <img
+                                    src={drivingLicensePreview}
+                                    alt="Driving License Preview"
+                                    style={{
+                                        width: '100%',
+                                        height: 'auto',
+                                        maxHeight: '300px',
+                                        objectFit: 'contain',
+                                        display: 'block'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={removeDrivingLicense}
+                                    disabled={loading}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '8px',
+                                        right: '8px',
+                                        padding: '6px 10px',
+                                        background: '#ef4444',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: loading ? 'not-allowed' : 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        opacity: loading ? 0.6 : 1
+                                    }}
+                                    onMouseOver={(e) => !loading && (e.target.style.background = '#dc2626')}
+                                    onMouseOut={(e) => (e.target.style.background = '#ef4444')}
+                                >
+                                    ✕ Remove
+                                </button>
+                            </div>
+                        ) : (
+                            <label style={{
+                                display: 'block',
+                                padding: '24px',
+                                border: '2px dashed #cbd5e1',
+                                borderRadius: '12px',
+                                textAlign: 'center',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                backgroundColor: '#f8fafc',
+                                transition: 'all 0.2s',
+                                opacity: loading ? 0.6 : 1
+                            }}
+                            onMouseOver={(e) => !loading && (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                            >
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleDrivingLicenseChange}
+                                    disabled={loading}
+                                    style={{ display: 'none' }}
+                                />
+                                <div style={{ fontSize: '32px', marginBottom: '8px' }}>📸</div>
+                                <div style={{ color: '#0f172a', fontWeight: '600', marginBottom: '4px' }}>
+                                    Click to upload driving license
+                                </div>
+                                <div style={{ color: '#64748b', fontSize: '12px' }}>
+                                    PNG, JPG, GIF up to 5MB
+                                </div>
+                            </label>
+                        )}
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
+                            ℹ️ For user verification, please upload a clear image of your driving license
                         </div>
                     </div>
 

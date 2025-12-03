@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Reg.scss'
 
-const vehicleTypes = ['Car', 'Motorbike', 'Van', 'Truck']
+// ✅ Updated to match backend VEHICLE_CHOICES
+const vehicleTypes = ['Hatchback', 'Sedan', 'SUV', 'Three-Wheeler', 'Two-Wheeler']
 
 export default function Reg() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
-    firstName: '', lastName: '', email: '', phone: '', password: '', vehicleNum: '', vehicleType: 'Car'
+    firstName: '', lastName: '', email: '', phone: '', password: '', vehicleNum: '', vehicleType: 'Sedan'
   })
   const [error, setError] = useState('')
 

@@ -56,6 +56,7 @@ class UserProfile(models.Model):
     phone=models.CharField(max_length=15,validators=[phone_regex])
     vehicle_number=models.CharField(max_length=100,validators=[vehicle_regex])
     vehicle_type=models.CharField(max_length=50,choices=VEHICLE_CHOICES)
+    driving_license=models.ImageField(upload_to='user_licenses/',null=True,blank=True,help_text='User driving license image')
     created_at= models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
 
@@ -183,10 +184,11 @@ class Booking(models.Model):
     slot=models.ForeignKey(to=P_Slot,on_delete=models.CASCADE,db_column='slot_id',related_name='booking_of_slot')
     lot=models.ForeignKey(to=P_Lot,on_delete=models.CASCADE,db_column='lot_id',related_name='booking_in_lot')
     vehicle_number=models.CharField(max_length=100,validators=[vehicle_regex])
+    vehicle_type=models.CharField(max_length=50,choices=VEHICLE_CHOICES,default='Sedan',help_text="Type of vehicle used for this booking")
     booking_type=models.CharField(max_length=100,choices=BOOKING_CHOICES)
     booking_time=models.DateField(auto_now_add=True)
     start_time=models.DateTimeField(null=True,blank=True,help_text="Booking start time (auto-set when created)")
-    end_time=models.DateTimeField(null=True,blank=True,help_text="Booking end time (default 1 hour from start)")
+    end_time=models.DateTimeField(null=True,blank=True,help_text="Booking end time (default 10 minutes from start)")
     price=models.DecimalField(max_digits=5,decimal_places=2,default=0.00)
 
     STATUS_CHOICES=[
@@ -201,9 +203,9 @@ class Booking(models.Model):
         if not self.start_time:
             from django.utils import timezone
             self.start_time = timezone.now()
-        # Set end_time to 1 hour after start_time if not already set
+        # Set end_time to 10 minutes after start_time if not already set
         if not self.end_time and self.start_time:
-            self.end_time = self.start_time + timedelta(hours=1)
+            self.end_time = self.start_time + timedelta(minutes=10)
         super().save(*args, **kwargs)
 
     def is_expired(self):

@@ -96,9 +96,27 @@ const Userland = () => {
           )}
 
           {!loading && lots.length > 0 && (
-            <div style={{ marginTop: '15px', padding: '15px', background: '#f0fdf4', borderRadius: '8px', width: '100%' }}>
-              <h5 style={{ margin: '0 0 10px 0', color: '#15803d' }}>Available Lots</h5>
-              <p style={{ margin: 0, fontSize: '14px', color: '#14532d' }}>
+            <div style={{ 
+              marginTop: '20px', 
+              padding: window.innerWidth <= 768 ? '14px 16px' : '18px 24px', 
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
+              borderRadius: window.innerWidth <= 768 ? '10px' : '12px', 
+              width: '100%',
+              boxShadow: '0 2px 8px rgba(21, 128, 61, 0.1)',
+              border: '1px solid #86efac',
+              maxWidth: '100%',
+              boxSizing: 'border-box'
+            }}>
+              <p style={{ 
+                margin: 0, 
+                fontSize: window.innerWidth <= 768 ? '14px' : '16px', 
+                fontWeight: '500',
+                color: '#15803d',
+                textAlign: 'center',
+                letterSpacing: '0.3px',
+                lineHeight: '1.5',
+                wordBreak: 'break-word'
+              }}>
                 {lots.length} parking lot{lots.length > 1 ? 's' : ''} available near you
               </p>
             </div>

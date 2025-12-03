@@ -6,7 +6,7 @@ import './Navbar.css'
 const Navbar = () => {
   const [open, setOpen] = useState(false)
   const [hasBooking, setHasBooking] = useState(false)
-  const { user, owner, logoutUser } = useAuth()
+  const { user, owner, admin, logoutUser } = useAuth()
 
   const location = useLocation()
 
@@ -61,7 +61,7 @@ const Navbar = () => {
           <Link to="/#about" className="nav-link">About</Link>
           <Link to="/lots" className="nav-link">Lots</Link>
 
-          {user ? (
+          {user && user.role === 'User' ? (
             <>
               <Link to="/profile" className="nav-link">Profile</Link>
               <Link to="/carwash" className="nav-link">Car Wash</Link>
@@ -69,12 +69,13 @@ const Navbar = () => {
               {hasBooking && <Link to="/service" className="nav-link">Services</Link>}
               <button onClick={logoutUser} className="nav-link btn-link">Logout</button>
             </>
+          ) : owner && owner.role === 'Owner' ? (
+            <>
+              <Link to="/owner" className="nav-link owner-link">Owner Dashboard</Link>
+              <button onClick={logoutUser} className="nav-link btn-link">Logout</button>
+            </>
           ) : (
             <Link to="/login" className="nav-link">Login</Link>
-          )}
-
-          {owner && (
-            <Link to="/owner" className="nav-link owner-link">Owner Dashboard</Link>
           )}
         </nav>
 

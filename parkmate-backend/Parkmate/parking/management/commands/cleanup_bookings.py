@@ -70,7 +70,7 @@ class Command(BaseCommand):
         count = 0
         for booking in missing_end:
             if booking.start_time:
-                booking.end_time = booking.start_time + timedelta(hours=1)
+                booking.end_time = booking.start_time + timedelta(minutes=10)
                 booking.save()
                 count += 1
         

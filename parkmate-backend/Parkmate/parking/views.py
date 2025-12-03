@@ -348,7 +348,7 @@ class P_LotVIewSet(ModelViewSet):
         for i in range(total_slots):
             P_Slot.objects.create(
                 lot=lot,
-                vehicle_type='CAR',  # Default vehicle type
+                vehicle_type='Sedan',  # Default vehicle type (valid choice)
                 is_available=True
             )
         print(f"✅ Created {total_slots} parking slots for lot: {lot.lot_name}")
@@ -485,7 +485,7 @@ class BookingViewSet(ModelViewSet):
             # ✅ AUTO-FIX MISSING END_TIME (legacy data)
             if booking.end_time is None and booking.start_time:
                 print(f"\n   ⚠️  FIXING: Booking {booking.booking_id} has missing end_time!")
-                booking.end_time = booking.start_time + timedelta(hours=1)
+                booking.end_time = booking.start_time + timedelta(minutes=10)
                 booking.save()
                 print(f"   ✅ Set end_time to {booking.end_time}")
             
@@ -579,10 +579,16 @@ class BookingViewSet(ModelViewSet):
         if not slot.is_available:
             raise ValidationError({'slot': 'This slot is not available'})
         
-        # INSTANT BOOKING - Set times to now and now+1hour
+        # ✅ VEHICLE TYPE VALIDATION - Check if user's vehicle type matches slot's vehicle type
+        if user_profile.vehicle_type != slot.vehicle_type:
+            raise ValidationError({
+                'vehicle_type': f'Your vehicle type ({user_profile.vehicle_type}) is not compatible with this slot. This slot is for {slot.vehicle_type} vehicles only.'
+            })
+        
+        # INSTANT BOOKING - Set times to now and now+10minutes
         now = timezone.now()
         start_time = now
-        end_time = now + timedelta(hours=1)
+        end_time = now + timedelta(minutes=10)
         
         # Check for overlapping bookings
         overlapping = Booking.objects.filter(
@@ -605,6 +611,7 @@ class BookingViewSet(ModelViewSet):
                 slot=slot,
                 lot=slot.lot,
                 vehicle_number=serializer.validated_data.get('vehicle_number'),
+                vehicle_type=user_profile.vehicle_type,  # Store user's vehicle type with booking
                 booking_type=serializer.validated_data.get('booking_type'),
                 start_time=start_time,
                 end_time=end_time,
@@ -747,7 +754,7 @@ class BookingViewSet(ModelViewSet):
             if booking.end_time is None and booking.start_time:
                 from datetime import timedelta
                 print(f"⚠️  FIXING: Booking {booking.booking_id} has missing end_time!")
-                booking.end_time = booking.start_time + timedelta(hours=1)
+                booking.end_time = booking.start_time + timedelta(minutes=10)
                 booking.save()
                 print(f"✅ Set end_time to {booking.end_time}\n")
             
@@ -797,9 +804,9 @@ class BookingViewSet(ModelViewSet):
             
             print(f"🔄 Renewing booking {booking.booking_id} for user {booking.user.firstname}")
             
-            # New instant booking starts now and expires in 1 hour
+            # New instant booking starts now and expires in 10 minutes
             new_start_time = timezone.now()
-            new_end_time = new_start_time + timedelta(hours=1)
+            new_end_time = new_start_time + timedelta(minutes=10)
             
             new_booking = Booking.objects.create(
                 user=booking.user,
@@ -895,7 +902,7 @@ class PaymentViewSet(ModelViewSet):
             profile=UserProfile.objects.get(auth_user=user)
             return Payment.objects.filter(user=profile)
         
-        if user.role=="Admin":
+        if user.role.lower()=="admin" or user.is_superuser:
             return Payment.objects.all()
         return Payment.objects.none()
     
@@ -1539,30 +1546,46 @@ class OwnerPaymentsView(APIView):
         try:
             user = request.user
             
-            # Check if user is owner
-            try:
-                owner = OwnerProfile.objects.get(auth_user=user)
-            except OwnerProfile.DoesNotExist:
-                return Response(
-                    {'error': 'Only parking lot owners can access payments'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            # Check if user is owner or admin
+            user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
             
-            print(f"📋 Fetching payments for owner: {owner.firstname} {owner.lastname}")
-            
-            # Get all lots owned by this owner
-            owner_lots = P_Lot.objects.filter(owner=owner)
-            lot_ids = list(owner_lots.values_list('lot_id', flat=True))
-            
-            print(f"   Owner has {len(lot_ids)} lots")
-            
-            # Get all bookings in owner's lots
-            bookings = Booking.objects.filter(lot_id__in=lot_ids)
-            
-            # Get all payments for these bookings
-            payments = Payment.objects.filter(
-                booking__in=bookings
-            ).select_related('booking__user', 'booking__lot', 'booking__slot').order_by('-created_at')
+            if user.is_superuser or user_role == 'admin':
+                # Admin can see all payments from all lots
+                print(f"📋 Admin user fetching all payments")
+                
+                # Get all bookings
+                bookings = Booking.objects.all()
+                
+                # Get all payments
+                payments = Payment.objects.filter(
+                    booking__in=bookings
+                ).select_related('booking__user', 'booking__lot', 'booking__slot').order_by('-created_at')
+                
+            else:
+                # Check if user is owner
+                try:
+                    owner = OwnerProfile.objects.get(auth_user=user)
+                except OwnerProfile.DoesNotExist:
+                    return Response(
+                        {'error': 'Only parking lot owners or admins can access payments'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                
+                print(f"📋 Fetching payments for owner: {owner.firstname} {owner.lastname}")
+                
+                # Get all lots owned by this owner
+                owner_lots = P_Lot.objects.filter(owner=owner)
+                lot_ids = list(owner_lots.values_list('lot_id', flat=True))
+                
+                print(f"   Owner has {len(lot_ids)} lots")
+                
+                # Get all bookings in owner's lots
+                bookings = Booking.objects.filter(lot_id__in=lot_ids)
+                
+                # Get all payments for these bookings
+                payments = Payment.objects.filter(
+                    booking__in=bookings
+                ).select_related('booking__user', 'booking__lot', 'booking__slot').order_by('-created_at')
             
             # Apply optional filters
             status_filter = request.query_params.get('status')
@@ -1717,65 +1740,39 @@ class CarWashBookingViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Validation Rule 4: Check for double-bookings at same lot/time
+            # Validation Rule 4: Check capacity limit (max 2 cars per time slot)
+            # Time slot is defined as the hour in which the booking starts
             lot_id = request.data.get('lot')
             if lot_id:
-                # Get service duration (default 30 mins if not available)
-                service_name = request.data.get('service_type', 'Full Service')  # service_type now contains service_name
-                service_duration = 30  # Default duration in minutes
-                try:
-                    # Try to get service by name first (service_type field now contains the display name)
-                    service = CarWashService.objects.get(service_name=service_name)
-                    service_duration = service.estimated_duration
-                except CarWashService.DoesNotExist:
-                    # Fallback to service_type field for backward compatibility
-                    try:
-                        service = CarWashService.objects.get(service_type=service_name.lower())
-                        service_duration = service.estimated_duration
-                    except CarWashService.DoesNotExist:
-                        pass
+                # Round down to nearest hour to get time slot
+                slot_start = scheduled_dt.replace(minute=0, second=0, microsecond=0)
+                slot_end = slot_start + timedelta(hours=1)
                 
-                scheduled_end = scheduled_dt + timedelta(minutes=service_duration)
-                
-                # Check for overlapping bookings at same lot
-                conflicting_bookings = CarWashBooking.objects.filter(
+                # Count active bookings in this time slot
+                capacity_per_slot = 2
+                bookings_in_slot = CarWashBooking.objects.filter(
                     lot_id=lot_id,
-                    scheduled_time__lt=scheduled_end,
-                    status__in=['pending', 'confirmed', 'in_progress']  # Only active bookings
-                ).exclude(status='cancelled')
+                    scheduled_time__gte=slot_start,
+                    scheduled_time__lt=slot_end,
+                    status__in=['pending', 'confirmed', 'in_progress']
+                ).exclude(status='cancelled').count()
                 
-                # Check if any booking overlaps with new booking time
-                for booking in conflicting_bookings:
-                    if booking.scheduled_time:
-                        # Get actual service duration for existing booking
-                        booking_duration = 30  # Default
-                        try:
-                            booking_service = CarWashService.objects.get(service_name=booking.service_type)
-                            booking_duration = booking_service.estimated_duration
-                        except CarWashService.DoesNotExist:
-                            try:
-                                booking_service = CarWashService.objects.get(service_type=booking.service_type.lower())
-                                booking_duration = booking_service.estimated_duration
-                            except:
-                                pass
-                        
-                        booking_end = booking.scheduled_time + timedelta(minutes=booking_duration)
-                        # Check for overlap: two bookings overlap if one starts before the other ends AND one ends after the other starts
-                        # Booking A: [start_a, end_a), Booking B: [start_b, end_b)
-                        # Overlap exists if: start_a < end_b AND end_a > start_b
-                        if booking.scheduled_time < scheduled_end and booking_end > scheduled_dt:
-                            print(f"❌ Validation failed: Time slot conflict with booking {booking.carwash_booking_id}")
-                            print(f"   Existing booking: {booking.scheduled_time} to {booking_end}")
-                            print(f"   New booking: {scheduled_dt} to {scheduled_end}")
-                            print(f"{'='*60}\n")
-                            return Response(
-                                {
-                                    'error': f'Time slot not available. Conflict with booking {booking.carwash_booking_id}',
-                                    'conflict_booking_id': booking.carwash_booking_id,
-                                    'available_from': (booking_end).isoformat()
-                                },
-                                status=status.HTTP_409_CONFLICT
-                            )
+                if bookings_in_slot >= capacity_per_slot:
+                    print(f"❌ Validation failed: Time slot at capacity ({bookings_in_slot}/{capacity_per_slot})")
+                    print(f"   Slot: {slot_start} to {slot_end}")
+                    print(f"{'='*60}\n")
+                    return Response(
+                        {
+                            'error': f'Time slot is full ({bookings_in_slot}/{capacity_per_slot} booked)',
+                            'slot_time': slot_start.isoformat(),
+                            'booked_count': bookings_in_slot,
+                            'capacity': capacity_per_slot
+                        },
+                        status=status.HTTP_409_CONFLICT
+                    )
+                
+                print(f"✅ Capacity check passed: {bookings_in_slot + 1}/{capacity_per_slot} slots")
+
             
             # All validations passed, proceed with creation
             data = dict(request.data)
@@ -1839,8 +1836,153 @@ class CarWashBookingViewSet(ModelViewSet):
             )
     
     def perform_create(self, serializer):
-        """Save the car wash booking"""
-        serializer.save()
+        """Save the car wash booking and schedule auto-completion"""
+        from django.utils import timezone
+        from datetime import timedelta
+        import threading
+        
+        booking = serializer.save()
+        
+        # Schedule auto-completion after 5 minutes for verified payments
+        if booking.payment_status == 'verified':
+            def auto_complete_booking():
+                import time
+                time.sleep(300)  # Wait 5 minutes (300 seconds)
+                
+                try:
+                    # Refresh booking from database
+                    booking.refresh_from_db()
+                    
+                    # Only auto-complete if still in pending or confirmed state
+                    if booking.status in ['pending', 'confirmed']:
+                        booking.status = 'completed'
+                        booking.completed_time = timezone.now()
+                        booking.save()
+                        
+                        print(f"✅ Auto-completed car wash booking {booking.carwash_booking_id}")
+                        
+                        # Send notification to user
+                        try:
+                            from channels.layers import get_channel_layer
+                            from asgiref.sync import async_to_sync
+                            
+                            channel_layer = get_channel_layer()
+                            user_id = booking.user.user.id
+                            
+                            notification_data = {
+                                'type': 'send_notification',
+                                'message': {
+                                    'type': 'carwash_completed',
+                                    'title': '🎉 Car Wash Complete!',
+                                    'message': f'Your {booking.service_type} service has been completed. Your vehicle is ready!',
+                                    'booking_id': booking.carwash_booking_id,
+                                    'timestamp': timezone.now().isoformat()
+                                }
+                            }
+                            
+                            async_to_sync(channel_layer.group_send)(
+                                f'user_{user_id}',
+                                notification_data
+                            )
+                            print(f"📢 Sent completion notification to user {user_id}")
+                        except Exception as notif_error:
+                            print(f"⚠️ Failed to send notification: {str(notif_error)}")
+                    
+                except Exception as e:
+                    print(f"❌ Auto-completion failed for booking {booking.carwash_booking_id}: {str(e)}")
+            
+            # Start auto-completion thread
+            completion_thread = threading.Thread(target=auto_complete_booking, daemon=True)
+            completion_thread.start()
+            print(f"⏰ Scheduled auto-completion for booking {booking.carwash_booking_id} in 5 minutes")
+    
+    @action(detail=False, methods=['GET'])
+    def available_time_slots(self, request):
+        """
+        Get available time slots for a specific date and lot.
+        Returns hourly slots from 9 AM to 8 PM with availability information.
+        
+        Query Parameters:
+        - date: YYYY-MM-DD format (required)
+        - lot_id: P_Lot ID (optional, if not provided shows all lots)
+        
+        Response:
+        {
+            "date": "2025-12-04",
+            "slots": [
+                {
+                    "time": "09:00",
+                    "available": true,
+                    "booked_count": 0,
+                    "capacity": 2
+                },
+                ...
+            ]
+        }
+        """
+        from django.utils import timezone
+        from dateutil import parser as date_parser
+        from datetime import datetime, time, timedelta
+        
+        # Get query parameters
+        date_str = request.query_params.get('date')
+        lot_id = request.query_params.get('lot_id')
+        
+        if not date_str:
+            return Response(
+                {'error': 'Date parameter is required (YYYY-MM-DD format)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Parse date
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Define time slots (9 AM to 8 PM, hourly)
+        time_slots = []
+        for hour in range(9, 21):  # 9 AM to 8 PM (20:00)
+            time_slots.append(time(hour, 0))
+        
+        # Build response
+        slots_data = []
+        capacity_per_slot = 2  # Max 2 cars per time slot
+        
+        for slot_time in time_slots:
+            # Combine date and time
+            slot_datetime = timezone.make_aware(datetime.combine(target_date, slot_time))
+            slot_end = slot_datetime + timedelta(hours=1)
+            
+            # Count bookings for this time slot
+            query = CarWashBooking.objects.filter(
+                scheduled_time__gte=slot_datetime,
+                scheduled_time__lt=slot_end,
+                status__in=['pending', 'confirmed', 'in_progress']
+            ).exclude(status='cancelled')
+            
+            if lot_id:
+                query = query.filter(lot_id=lot_id)
+            
+            booked_count = query.count()
+            available = booked_count < capacity_per_slot
+            
+            slots_data.append({
+                'time': slot_time.strftime('%H:%M'),
+                'available': available,
+                'booked_count': booked_count,
+                'capacity': capacity_per_slot,
+                'datetime': slot_datetime.isoformat()
+            })
+        
+        return Response({
+            'date': date_str,
+            'lot_id': lot_id,
+            'slots': slots_data
+        }, status=status.HTTP_200_OK)
     
     def update(self, request, *args, **kwargs):
         """
@@ -2187,3 +2329,58 @@ class OwnerCarWashBookingViewSet(ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ===== USER BOOKED LOTS (For Reviews) =====
+from rest_framework.decorators import api_view, permission_classes
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_booked_lots(request):
+    """
+    Returns all parking lots where the logged-in user has completed bookings.
+    Used to populate the "Select Parking Lot" dropdown in the Review form.
+    """
+    try:
+        user = request.user
+        print(f"📍 Fetching completed bookings for user: {user.username}")
+        
+        # Get user profile
+        try:
+            user_profile = UserProfile.objects.get(auth_user=user)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all completed bookings for this user
+        completed_bookings = Booking.objects.filter(
+            user=user_profile,
+            status__iexact='completed'  # Case-insensitive match for 'completed'
+        ).select_related('lot')
+        
+        # Extract unique lot IDs (SQLite compatible - no DISTINCT ON)
+        lot_ids = list(set(completed_bookings.values_list('lot_id', flat=True)))
+        
+        print(f"   Found {len(lot_ids)} lots with completed bookings")
+        print(f"   Lot IDs: {lot_ids}")
+        print(f"   Total bookings: {completed_bookings.count()}")
+        
+        # Get lot details
+        lots = P_Lot.objects.filter(lot_id__in=lot_ids)
+        print(f"   P_Lot query results: {lots.count()} lots")
+        for lot in lots:
+            print(f"     - Lot {lot.lot_id}: {lot.lot_name}")
+        serializer = P_LotSerializer(lots, many=True)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"❌ Error fetching user booked lots: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

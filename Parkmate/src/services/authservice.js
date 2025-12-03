@@ -3,12 +3,8 @@ import api from './api';
 const authService = {
   // Register User
   registerUser: async (userData) => {
-    const formData = new FormData();
-    Object.keys(userData).forEach(key => {
-      formData.append(key, userData[key]);
-    });
-    
-    const response = await api.post('/auth/register-user/', formData, {
+    // userData is already FormData from the component
+    const response = await api.post('/auth/register-user/', userData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     return response.data;

@@ -59,6 +59,26 @@ export const useWebSocketNotifications = (userId) => {
               return;
             }
 
+            // Handle car wash completion notification
+            if (data.type === 'carwash_completed') {
+              console.log('🚗 Car wash completion notification:', data);
+              toast.success(data.message, {
+                icon: '🎉',
+                autoClose: 8000,
+                position: 'top-right'
+              });
+              
+              // Optional: Play a notification sound or trigger browser notification
+              if (window.Notification && Notification.permission === 'granted') {
+                new Notification(data.title || 'Car Wash Complete', {
+                  body: data.message,
+                  icon: '/logo.png',
+                  badge: '/logo.png'
+                });
+              }
+              return;
+            }
+
             // Send notification using React Toastify
             const notificationType = data.type || 'info';
             const message = data.message || 'Notification received';

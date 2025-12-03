@@ -27,7 +27,7 @@ const AdminDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true)
-            const [users, owners, bookings, payments, employees] = await Promise.all([
+            const [users, owners, bookings, allPayments, employees] = await Promise.all([
                 parkingService.getUsers().catch(err => {
                     console.error('Error fetching users:', err)
                     return []
@@ -40,9 +40,10 @@ const AdminDashboard = () => {
                     console.error('Error fetching bookings:', err)
                     return []
                 }),
+                // Fetch all payments to calculate platform revenue accurately
                 parkingService.getPayments().catch(err => {
                     console.error('Error fetching payments:', err)
-                    return []
+                    return { results: [] }
                 }),
                 parkingService.getEmployees().catch(err => {
                     console.error('Error fetching employees:', err)
@@ -54,7 +55,7 @@ const AdminDashboard = () => {
             const usersList = Array.isArray(users) ? users : (users?.results || [])
             const ownersList = Array.isArray(owners) ? owners : (owners?.results || [])
             const bookingsList = Array.isArray(bookings) ? bookings : (bookings?.results || [])
-            const paymentsList = Array.isArray(payments) ? payments : (payments?.results || [])
+            const paymentsList = Array.isArray(allPayments) ? allPayments : (allPayments?.results || [])
             const employeesList = Array.isArray(employees) ? employees : (employees?.results || [])
 
             console.log('📊 Dashboard Data:', {
@@ -65,19 +66,32 @@ const AdminDashboard = () => {
                 employees: employeesList.length,
             })
 
+            console.log('💳 Payments Sample:', paymentsList.slice(0, 3))
+
             // Calculate statistics
             const totalUsers = usersList?.length || 0
             const totalOwners = ownersList?.length || 0
             const totalBookings = bookingsList?.length || 0
-            const totalRevenue = (paymentsList || []).reduce((sum, p) => sum + (p.amount || 0), 0)
+            // Only count SUCCESS payments for revenue (exclude PENDING and FAILED)
+            const successfulPayments = (paymentsList || []).filter(p => p.status === 'SUCCESS')
+            const totalPayments = successfulPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+            // Platform gets 30% of all successful payments (slot bookings + car wash bookings)
+            const platformRevenue = totalPayments * 0.30
             const pendingOwners = (ownersList || []).filter(o => o.verification_status === 'PENDING').length
             const totalEmployees = (employeesList || []).length
+
+            console.log('💰 Revenue Calculation:', {
+                totalPayments: paymentsList.length,
+                successfulPayments: successfulPayments.length,
+                totalAmount: totalPayments.toFixed(2),
+                platformRevenue: platformRevenue.toFixed(2)
+            })
 
             setStats({
                 totalUsers,
                 totalOwners,
                 totalBookings,
-                totalRevenue,
+                totalRevenue: platformRevenue,
                 pendingOwners,
                 totalEmployees,
             })
@@ -181,7 +195,7 @@ const AdminDashboard = () => {
                     <div className="card-icon">💰</div>
                     <h3>Platform Revenue</h3>
                     <div className="value">₹{stats.totalRevenue.toLocaleString('en-IN')}</div>
-                    <div className="sub-text">From payments</div>
+                    <div className="sub-text">30% commission from all payments</div>
                 </div>
 
                 <div className="bento-card employees">

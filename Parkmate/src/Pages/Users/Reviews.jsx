@@ -55,7 +55,6 @@ const Reviews = () => {
     if (user) {
       fetchReviews()
       fetchBookedLots()
-      fetchAllLots()
       fetchAllReviews()
     }
   }, [user])
@@ -75,18 +74,11 @@ const Reviews = () => {
 
   const fetchBookedLots = async () => {
     try {
-      const response = await api.get('/bookings/')
-      console.log('Bookings response:', response.data)
-      // Get unique lots from bookings
-      const uniqueLots = {}
-      response.data.forEach((booking) => {
-        if (booking.lot_detail && !uniqueLots[booking.lot_detail.lot_id]) {
-          uniqueLots[booking.lot_detail.lot_id] = booking.lot_detail
-        }
-      })
-      setBookedLots(Object.values(uniqueLots))
+      const response = await api.get('/user-booked-lots/')
+      setBookedLots(response.data)
     } catch (error) {
       console.error('Error fetching booked lots:', error)
+      setBookedLots([])
     }
   }
 
