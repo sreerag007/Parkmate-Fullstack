@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { AuthProvider } from './Context/AuthContext'
+import { TimeProvider } from './contexts/TimeContext'
 import ProtectedRoute from './Components/ProtectedRoute'
 import UserLand from './Pages/Users/Userland'
 import Lots from './Pages/Users/Lots'
@@ -53,20 +54,21 @@ function AppWithWebSocket() {
   useWebSocketNotifications(userId);
 
   return (
-    <BrowserRouter>
-      <Navbar />
-      
-      {/* Global Toast Notification Container */}
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        hideProgressBar={false}
-        newestOnTop={true}
-        closeOnClick
-        pauseOnHover
-        draggable
-        theme="colored"
-      />
+    <TimeProvider>
+      <BrowserRouter>
+        <Navbar />
+        
+        {/* Global Toast Notification Container */}
+        <ToastContainer
+          position="top-right"
+          autoClose={4000}
+          hideProgressBar={false}
+          newestOnTop={true}
+          closeOnClick
+          pauseOnHover
+          draggable
+          theme="colored"
+        />
 
       <div className="app-content">
         <div className="container">
@@ -122,17 +124,18 @@ function AppWithWebSocket() {
             </div>
           </div>
         </BrowserRouter>
-      );
-    }
+      </TimeProvider>
+    );
+  }
 
-    function App() {
-      return (
-        <AuthProvider>
-          <DataProvider>
-            <AppWithWebSocket />
-          </DataProvider>
-        </AuthProvider>
-      )
-    }
+  function App() {
+    return (
+      <AuthProvider>
+        <DataProvider>
+          <AppWithWebSocket />
+        </DataProvider>
+      </AuthProvider>
+    )
+  }
 
-    export default App
+  export default App

@@ -110,7 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'  # Use UTC for consistency with frontend and JS Date handling
+TIME_ZONE = 'Asia/Kolkata'  # Indian Standard Time (IST) - UTC+5:30
 
 USE_I18N = True
 

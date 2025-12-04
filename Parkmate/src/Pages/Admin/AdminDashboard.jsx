@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import parkingService from '../../services/parkingService'
+import ServerClock from '../../components/ServerClock'
 import './Admin.scss'
 
 const AdminDashboard = () => {
@@ -159,7 +160,9 @@ const AdminDashboard = () => {
                     <h1>Admin Overview</h1>
                     <p className="subtitle">System-wide metrics and management.</p>
                 </div>
-                <div className="date-badge">{new Date().toLocaleDateString()}</div>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <ServerClock compact={true} />
+                </div>
             </header>
 
             {error && (

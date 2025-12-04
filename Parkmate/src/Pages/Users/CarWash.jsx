@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../Context/AuthContext'
+import { useServerTime } from '../../contexts/TimeContext'
 import parkingService from '../../services/parkingService'
 import PaymentModal from '../../Components/PaymentModal'
 import { Droplets, Sparkles, Wind, Star } from 'lucide-react'
@@ -10,6 +11,7 @@ import './CarWash.css'
 const CarWash = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { serverTime, timeData, isBeforeServerTime } = useServerTime()
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedService, setSelectedService] = useState(null)
@@ -97,24 +99,25 @@ const CarWash = () => {
     fetchTimeSlots()
   }, [bookingData.scheduled_date, bookingData.lot])
 
-  // Filter past time slots for today's date
+  // Filter past time slots for today's date using SERVER TIME
   const filterPastTimeSlots = (slots, selectedDate) => {
-    const today = new Date()
+    // Use server time instead of client time
+    const today = serverTime || new Date()
     const selected = new Date(selectedDate)
     
     // Reset time to compare only dates
-    today.setHours(0, 0, 0, 0)
+    const todayDate = new Date(today)
+    todayDate.setHours(0, 0, 0, 0)
     selected.setHours(0, 0, 0, 0)
     
     // If selected date is not today, return all slots
-    if (selected.getTime() !== today.getTime()) {
+    if (selected.getTime() !== todayDate.getTime()) {
       return slots
     }
     
-    // Filter out past time slots for today
-    const now = new Date()
-    const currentHour = now.getHours()
-    const currentMinute = now.getMinutes()
+    // Filter out past time slots for today using SERVER TIME
+    const currentHour = today.getHours()
+    const currentMinute = today.getMinutes()
     
     return slots.map(slot => {
       // Parse slot time (format: "HH:MM AM/PM" or "HH:MM")
@@ -143,9 +146,11 @@ const CarWash = () => {
     })
   }
 
-  // Calculate min and max date (today to 7 days from now)
+  // Calculate min and max date using SERVER TIME (synced via WebSocket)
   const getMinMaxDates = () => {
-    const today = new Date()
+    // Use server time instead of client time for accuracy
+    const today = serverTime || new Date()
+    
     // Get local date components to avoid timezone issues
     const year = today.getFullYear()
     const month = String(today.getMonth() + 1).padStart(2, '0')

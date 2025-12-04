@@ -16,12 +16,6 @@ export const useWebSocketNotifications = (userId) => {
   const reconnectTimeoutRef = useRef(null);
 
   useEffect(() => {
-    // WebSocket notifications temporarily disabled
-    // To enable: start Daphne server with: daphne -p 8000 Parkmate.asgi:application
-    console.log('ℹ️ WebSocket notifications are currently disabled');
-    return;
-
-    // eslint-disable-next-line no-unreachable
     if (!userId) {
       console.warn('⚠️  useWebSocketNotifications: userId is not provided');
       return;
