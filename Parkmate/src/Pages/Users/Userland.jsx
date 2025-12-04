@@ -105,7 +105,10 @@ const Userland = () => {
               boxShadow: '0 2px 8px rgba(21, 128, 61, 0.1)',
               border: '1px solid #86efac',
               maxWidth: '100%',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
             }}>
               <p style={{ 
                 margin: 0, 

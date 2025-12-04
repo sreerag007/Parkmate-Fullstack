@@ -1907,9 +1907,28 @@ class CarWashBookingViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Validation Rule 4: Check capacity limit (max 2 cars per time slot)
-            # Time slot is defined as the hour in which the booking starts
+            # Validation Rule 4: Verify lot provides carwash service
             lot_id = request.data.get('lot')
+            if lot_id:
+                try:
+                    lot = P_Lot.objects.get(lot_id=lot_id)
+                    if not lot.provides_carwash:
+                        print(f"❌ Validation failed: Lot does not provide carwash service")
+                        print(f"{'='*60}\n")
+                        return Response(
+                            {'error': 'This parking lot does not provide car wash services'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except P_Lot.DoesNotExist:
+                    print(f"❌ Validation failed: Lot not found")
+                    print(f"{'='*60}\n")
+                    return Response(
+                        {'error': 'Parking lot not found'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            # Validation Rule 5: Check capacity limit (max 2 cars per time slot)
+            # Time slot is defined as the hour in which the booking starts
             if lot_id:
                 # Round down to nearest hour to get time slot
                 slot_start = scheduled_dt.replace(minute=0, second=0, microsecond=0)

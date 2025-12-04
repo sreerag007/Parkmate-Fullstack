@@ -228,6 +228,7 @@ const AdminOwners = () => {
                                                 <th>Address</th>
                                                 <th>Total Slots</th>
                                                 <th>Available Slots</th>
+                                                <th>Car Wash Service</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -247,6 +248,31 @@ const AdminOwners = () => {
                                                         }}>
                                                             {lot.available_slots || 0}
                                                         </span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        {lot.provides_carwash ? (
+                                                            <span style={{
+                                                                padding: '4px 12px',
+                                                                borderRadius: '20px',
+                                                                backgroundColor: '#dbeafe',
+                                                                color: '#1e40af',
+                                                                fontWeight: '600',
+                                                                fontSize: '0.85rem'
+                                                            }}>
+                                                                ✅ Yes
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{
+                                                                padding: '4px 12px',
+                                                                borderRadius: '20px',
+                                                                backgroundColor: '#f3f4f6',
+                                                                color: '#6b7280',
+                                                                fontWeight: '600',
+                                                                fontSize: '0.85rem'
+                                                            }}>
+                                                                ❌ No
+                                                            </span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}

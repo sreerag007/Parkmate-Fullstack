@@ -52,13 +52,19 @@ const CarWash = () => {
     fetchServices()
   }, [])
 
-  // Fetch user's lots for optional selection
+  // Fetch user's lots for optional selection (only carwash-enabled lots)
   useEffect(() => {
     const fetchLots = async () => {
       try {
         const response = await parkingService.getLots()
         if (response) {
-          setLots(response)
+          // Filter to show only lots that provide carwash service
+          const carwashLots = response.filter(lot => lot.provides_carwash === true)
+          setLots(carwashLots)
+          
+          if (carwashLots.length === 0) {
+            console.log('ℹ️ No parking lots with carwash service available')
+          }
         }
       } catch (error) {
         console.error('Error fetching lots:', error)
@@ -451,14 +457,22 @@ const CarWash = () => {
                 value={bookingData.lot || ''}
                 onChange={handleInputChange}
                 required
+                disabled={lots.length === 0}
               >
-                <option value="">Select a parking lot</option>
+                <option value="">
+                  {lots.length === 0 ? 'No parking lots with car wash service available' : 'Select a parking lot'}
+                </option>
                 {lots.map((lot) => (
                   <option key={lot.lot_id} value={lot.lot_id}>
                     {lot.lot_name} - {lot.city}
                   </option>
                 ))}
               </select>
+              {lots.length === 0 && (
+                <p style={{ fontSize: '0.85rem', color: '#dc2626', marginTop: '0.5rem' }}>
+                  ℹ️ No parking lots currently offer car wash services. Please check back later.
+                </p>
+              )}
             </div>
 
             <div className="form-section">

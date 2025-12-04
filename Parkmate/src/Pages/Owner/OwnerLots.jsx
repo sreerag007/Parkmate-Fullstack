@@ -21,7 +21,8 @@ const OwnerLots = () => {
         state: '',
         pincode: '',
         total_slots: 10,
-        lot_image: null
+        lot_image: null,
+        provides_carwash: false
     });
     const [formError, setFormError] = useState('');
     const [_EDITING_LOT, _setEditingLot] = useState(null);
@@ -95,6 +96,7 @@ const OwnerLots = () => {
             formData.append('state', newLot.state || '');
             formData.append('pincode', newLot.pincode);
             formData.append('total_slots', parseInt(newLot.total_slots, 10));
+            formData.append('provides_carwash', newLot.provides_carwash);
             
             // Add image if provided
             if (newLot.lot_image) {
@@ -125,7 +127,8 @@ const OwnerLots = () => {
                 state: '',
                 pincode: '',
                 total_slots: 10,
-                lot_image: null
+                lot_image: null,
+                provides_carwash: false
             });
             setShowAddForm(false);
             alert('✅ Parking lot created successfully!');
@@ -374,6 +377,22 @@ const OwnerLots = () => {
                                     ✓ {newLot.lot_image.name}
                                 </div>
                             )}
+                        </div>
+                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={newLot.provides_carwash}
+                                    onChange={(e) => setNewLot({ ...newLot, provides_carwash: e.target.checked })}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: '16px', fontWeight: '500' }}>
+                                    🚗 This parking lot provides car wash services
+                                </span>
+                            </label>
+                            <p style={{ fontSize: '13px', color: '#666', marginTop: '5px', marginLeft: '30px' }}>
+                                Enable this if your parking lot offers car wash services to customers
+                            </p>
                         </div>
                         <div className="form-actions">
                             <button type="submit" className="btn-save-changes">

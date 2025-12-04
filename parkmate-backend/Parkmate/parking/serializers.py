@@ -231,6 +231,7 @@ class P_LotSerializer(serializers.ModelSerializer):
             "lot_image",  # Writable field for uploads
             "lot_image_url",  # Read-only URL field
             "avg_rating",
+            "provides_carwash",  # New field for carwash service availability
         ]
     def get_available_slots(self, obj):
         try:
