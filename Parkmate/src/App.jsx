@@ -22,6 +22,7 @@ import OwnerPayments from './Pages/Owner/OwnerPayments'
 import OwnerProfile from './Pages/Owner/OwnerProfile'
 import OwnerReviews from './Pages/Owner/OwnerReviews'
 import OwnerCarWash from './Pages/Owner/OwnerCarWash'
+import OwnerEmployees from './Pages/Owner/OwnerEmployees'
 import AdminLayout from './Pages/Admin/AdminLayout'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
 import AdminUsers from './Pages/Admin/AdminUsers'
@@ -99,6 +100,7 @@ function AppWithWebSocket() {
                     <Route path="carwash" element={<OwnerCarWash />} />
                     <Route path="payments" element={<OwnerPayments />} />
                     <Route path="services" element={<OwnerServices />} />
+                    <Route path="employees" element={<OwnerEmployees />} />
                     <Route path="reviews" element={<OwnerReviews />} />
                     <Route path="profile" element={<OwnerProfile />} />
                   </Route>

@@ -70,8 +70,8 @@ const parkingService = {
   },
 
   // ===== PARKING SLOTS =====
-  getSlots: async () => {
-    const response = await api.get('/slots/');
+  getSlots: async (params = {}) => {
+    const response = await api.get('/slots/', { params });
     return response.data;
   },
 

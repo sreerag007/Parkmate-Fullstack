@@ -17,7 +17,7 @@ if lot:
     # - 10 Sedan (keep half as Sedan)
     # - 5 Hatchback
     # - 3 Two-Wheeler
-    # - 2 SUV
+    # - 2 Multi-Axle
     
     updates = []
     
@@ -39,11 +39,11 @@ if lot:
             slots[i].vehicle_type = 'Two-Wheeler'
             updates.append(f"Slot {slots[i].slot_id}: Two-Wheeler")
     
-    # Last 2 slots: SUV
+    # Last 2 slots: Multi-Axle
     for i in range(18, 20):
         if i < len(slots):
-            slots[i].vehicle_type = 'SUV'
-            updates.append(f"Slot {slots[i].slot_id}: SUV")
+            slots[i].vehicle_type = 'Multi-Axle'
+            updates.append(f"Slot {slots[i].slot_id}: Multi-Axle")
     
     # Save all changes
     for slot in slots:

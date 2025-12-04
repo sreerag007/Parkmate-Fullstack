@@ -16,6 +16,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Token ${token}`;
     }
+    // Don't reject requests without tokens - let the backend decide if auth is required
     
     // If data is FormData, configure it for multipart/form-data
     if (config.data instanceof FormData) {

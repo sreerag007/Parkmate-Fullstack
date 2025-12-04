@@ -230,7 +230,7 @@ const Lot3 = () => {
           <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}>
             <option value="Hatchback">Hatchback</option>
             <option value="Sedan">Sedan</option>
-            <option value="SUV">SUV</option>
+            <option value="Multi-Axle">Multi-Axle</option>
             <option value="Three Wheeler">Three Wheeler</option>
             <option value="Two Wheeler">Two Wheeler</option>
           </select>

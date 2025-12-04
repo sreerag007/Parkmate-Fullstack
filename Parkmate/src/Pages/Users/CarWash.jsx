@@ -84,7 +84,9 @@ const CarWash = () => {
         )
         console.log('✅ Time slots received:', response)
         if (response && response.slots) {
-          setTimeSlots(response.slots)
+          // Filter out past time slots if date is today
+          const filteredSlots = filterPastTimeSlots(response.slots, bookingData.scheduled_date)
+          setTimeSlots(filteredSlots)
         }
       } catch (error) {
         console.error('❌ Error fetching time slots:', error)
@@ -94,6 +96,74 @@ const CarWash = () => {
 
     fetchTimeSlots()
   }, [bookingData.scheduled_date, bookingData.lot])
+
+  // Filter past time slots for today's date
+  const filterPastTimeSlots = (slots, selectedDate) => {
+    const today = new Date()
+    const selected = new Date(selectedDate)
+    
+    // Reset time to compare only dates
+    today.setHours(0, 0, 0, 0)
+    selected.setHours(0, 0, 0, 0)
+    
+    // If selected date is not today, return all slots
+    if (selected.getTime() !== today.getTime()) {
+      return slots
+    }
+    
+    // Filter out past time slots for today
+    const now = new Date()
+    const currentHour = now.getHours()
+    const currentMinute = now.getMinutes()
+    
+    return slots.map(slot => {
+      // Parse slot time (format: "HH:MM AM/PM" or "HH:MM")
+      const timeStr = slot.time
+      let hours, minutes
+      
+      if (timeStr.includes('AM') || timeStr.includes('PM')) {
+        // 12-hour format
+        const [time, meridiem] = timeStr.split(' ')
+        const [h, m] = time.split(':').map(Number)
+        hours = meridiem === 'PM' && h !== 12 ? h + 12 : (meridiem === 'AM' && h === 12 ? 0 : h)
+        minutes = m
+      } else {
+        // 24-hour format
+        [hours, minutes] = timeStr.split(':').map(Number)
+      }
+      
+      // Check if slot time is in the past
+      const isPast = hours < currentHour || (hours === currentHour && minutes <= currentMinute)
+      
+      return {
+        ...slot,
+        available: isPast ? false : slot.available,
+        isPast: isPast
+      }
+    })
+  }
+
+  // Calculate min and max date (today to 7 days from now)
+  const getMinMaxDates = () => {
+    const today = new Date()
+    // Get local date components to avoid timezone issues
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    const todayStr = `${year}-${month}-${day}`
+    
+    const maxDate = new Date(today)
+    maxDate.setDate(maxDate.getDate() + 7)
+    const maxYear = maxDate.getFullYear()
+    const maxMonth = String(maxDate.getMonth() + 1).padStart(2, '0')
+    const maxDay = String(maxDate.getDate()).padStart(2, '0')
+    const maxDateStr = `${maxYear}-${maxMonth}-${maxDay}`
+    
+    return {
+      min: todayStr,
+      max: maxDateStr
+    }
+  }
 
   // Get icon for service type
   const getServiceIcon = (serviceType) => {
@@ -121,9 +191,28 @@ const CarWash = () => {
     setStep('details')
   }
 
-  // Handle booking details change
+  // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    
+    // Validate date selection
+    if (name === 'scheduled_date') {
+      const { min, max } = getMinMaxDates()
+      const selectedDate = value
+      
+      // Check if date is before today
+      if (selectedDate < min) {
+        toast.error('Cannot select past dates. Please choose today or a future date.')
+        return
+      }
+      
+      // Check if date is beyond 7-day window
+      if (selectedDate > max) {
+        toast.error('Bookings are only allowed within the next 7 days.')
+        return
+      }
+    }
+    
     setBookingData({
       ...bookingData,
       [name]: value,
@@ -212,9 +301,9 @@ const CarWash = () => {
       // Add payment details if provided (from payment modal)
       if (paymentData) {
         if (paymentData.transactionId) {
-          payload.payment_reference = paymentData.transactionId
+          payload.transaction_id = paymentData.transactionId
         } else if (paymentData.upiId) {
-          payload.payment_reference = paymentData.upiId
+          payload.transaction_id = paymentData.upiId
         }
       }
 
@@ -374,9 +463,13 @@ const CarWash = () => {
                 name="scheduled_date"
                 value={bookingData.scheduled_date}
                 onChange={handleInputChange}
-                min={new Date().toISOString().split('T')[0]}
+                min={getMinMaxDates().min}
+                max={getMinMaxDates().max}
                 required
               />
+              <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                ℹ️ Bookings are available only within the next 7 days
+              </p>
             </div>
 
             {/* Debug info */}
@@ -385,41 +478,68 @@ const CarWash = () => {
             {bookingData.scheduled_date && bookingData.lot ? (
               <div className="form-section">
                 <label>Select Time Slot * (9 AM - 8 PM)</label>
-                <div className="time-slots-grid">
-                  {timeSlots.length === 0 ? (
-                    <p className="loading-slots">Loading time slots...</p>
-                  ) : (
-                    timeSlots.map((slot) => (
-                      <button
-                        key={slot.time}
-                        type="button"
-                        className={`time-slot ${
-                          selectedTimeSlot?.time === slot.time ? 'selected' : ''
-                        } ${!slot.available ? 'disabled' : ''}`}
-                        onClick={() => handleTimeSlotSelect(slot)}
-                        disabled={!slot.available}
-                      >
-                        <div className="slot-time">{slot.time}</div>
-                        {slot.booked_count > 0 && (
-                          <div className="slot-badge">
-                            {slot.booked_count}/{slot.capacity}
-                          </div>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="slot-legend">
-                  <div className="legend-item">
-                    <span className="legend-box available"></span> Available
+                {timeSlots.length === 0 ? (
+                  <p className="loading-slots">Loading time slots...</p>
+                ) : timeSlots.every(slot => !slot.available) ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '2rem',
+                    background: '#fef2f2',
+                    borderRadius: '12px',
+                    border: '1px solid #fecaca',
+                    marginBottom: '1rem'
+                  }}>
+                    <p style={{ color: '#dc2626', fontWeight: '600', marginBottom: '0.5rem' }}>
+                      ⏰ No time slots available for the selected date
+                    </p>
+                    <p style={{ color: '#991b1b', fontSize: '0.9rem' }}>
+                      {bookingData.scheduled_date === getMinMaxDates().min 
+                        ? 'All time slots for today have passed. Please select a future date.'
+                        : 'All slots are fully booked. Please select a different date.'}
+                    </p>
                   </div>
-                  <div className="legend-item">
-                    <span className="legend-box partial"></span> Partially Booked
-                  </div>
-                  <div className="legend-item">
-                    <span className="legend-box full"></span> Full
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="time-slots-grid">
+                      {timeSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          className={`time-slot ${
+                            selectedTimeSlot?.time === slot.time ? 'selected' : ''
+                          } ${!slot.available ? 'disabled' : ''} ${slot.isPast ? 'past' : ''}`}
+                          onClick={() => handleTimeSlotSelect(slot)}
+                          disabled={!slot.available}
+                          title={slot.isPast ? 'Time slot has passed' : (slot.available ? 'Available' : 'Fully booked')}
+                        >
+                          <div className="slot-time">{slot.time}</div>
+                          {slot.booked_count > 0 && !slot.isPast && (
+                            <div className="slot-badge">
+                              {slot.booked_count}/{slot.capacity}
+                            </div>
+                          )}
+                          {slot.isPast && (
+                            <div className="slot-badge" style={{ background: '#6b7280' }}>Past</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="slot-legend">
+                      <div className="legend-item">
+                        <span className="legend-box available"></span> Available
+                      </div>
+                      <div className="legend-item">
+                        <span className="legend-box partial"></span> Partially Booked
+                      </div>
+                      <div className="legend-item">
+                        <span className="legend-box full"></span> Full
+                      </div>
+                      <div className="legend-item">
+                        <span className="legend-box" style={{ background: '#d1d5db' }}></span> Past
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div className="form-section">

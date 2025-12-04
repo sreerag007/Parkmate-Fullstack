@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import './Reg.scss'
 
 // ✅ Updated to match backend VEHICLE_CHOICES
-const vehicleTypes = ['Hatchback', 'Sedan', 'SUV', 'Three-Wheeler', 'Two-Wheeler']
+const vehicleTypes = ['Hatchback', 'Sedan', 'Multi-Axle', 'Three-Wheeler', 'Two-Wheeler']
 
 export default function Reg() {
   const navigate = useNavigate()

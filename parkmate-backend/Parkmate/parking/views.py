@@ -361,10 +361,35 @@ class P_SlotViewSet(ModelViewSet):
 
     def get_queryset(self):
         user= self.request.user
+        
+        # Get base queryset based on user role
         if user.role=="Owner":
             owner=OwnerProfile.objects.get(auth_user=user)
-            return P_Slot.objects.filter(lot__owner=owner)
-        return P_Slot.objects.filter(lot__owner__verification_status="APPROVED")
+            queryset = P_Slot.objects.filter(lot__owner=owner)
+        else:
+            queryset = P_Slot.objects.filter(lot__owner__verification_status="APPROVED")
+        
+        # Apply optional filters from query parameters
+        vehicle_type = self.request.GET.get('vehicle_type')
+        lot_id = self.request.GET.get('lot_id')
+        
+        print(f"\n🔍 SLOT QUERY PARAMS:")
+        print(f"   vehicle_type: {vehicle_type}")
+        print(f"   lot_id: {lot_id}")
+        print(f"   Initial queryset count: {queryset.count()}")
+        
+        if vehicle_type and vehicle_type.lower() != 'all':
+            print(f"   ✅ Applying vehicle_type filter: {vehicle_type}")
+            queryset = queryset.filter(vehicle_type__iexact=vehicle_type)
+            print(f"   After vehicle_type filter: {queryset.count()} slots")
+        
+        if lot_id:
+            print(f"   ✅ Applying lot_id filter: {lot_id}")
+            queryset = queryset.filter(lot__lot_id=lot_id)
+            print(f"   After lot_id filter: {queryset.count()} slots")
+        
+        print(f"   Final queryset count: {queryset.count()}\n")
+        return queryset
     
     def list(self, request, *args, **kwargs):
         """Auto-complete expired bookings and free up slots before returning list"""
@@ -389,10 +414,21 @@ class P_SlotViewSet(ModelViewSet):
             
             booking.status = 'completed'
             
-            # Auto-clear carwash when booking completes
+            # Auto-clear carwash when booking completes and release employees
             carwash_services = booking.booking_by_user.all()
             if carwash_services.exists():
-                print(f"🧼 Auto-clearing {carwash_services.count()} carwash service(s)")
+                print(f"🧼 Auto-clearing {carwash_services.count()} add-on carwash service(s)")
+                for carwash in carwash_services:
+                    # Release employee assigned to this add-on carwash
+                    if carwash.employee:
+                        employee = carwash.employee
+                        print(f"   🔄 Releasing employee: {employee.firstname} {employee.lastname} (ID: {employee.employee_id})")
+                        old_assignments = employee.current_assignments
+                        employee.current_assignments = max(0, employee.current_assignments - 1)
+                        if employee.current_assignments < 3:
+                            employee.availability_status = 'available'
+                        employee.save()
+                        print(f"   ✅ Employee released: {old_assignments} → {employee.current_assignments}, Status: {employee.availability_status}")
                 carwash_services.delete()
             
             booking.save()
@@ -463,10 +499,21 @@ class BookingViewSet(ModelViewSet):
             booking.status = 'completed'
             booking.slot.is_available = True
             
-            # Auto-clear carwash service when booking completes
+            # Auto-clear add-on carwash service when booking completes and release employees
             carwash_services = booking.booking_by_user.all()
             if carwash_services.exists():
-                print(f"🧼 Auto-clearing {carwash_services.count()} carwash service(s) for booking {booking.booking_id}")
+                print(f"🧼 Auto-clearing {carwash_services.count()} add-on carwash service(s) for booking {booking.booking_id}")
+                for carwash in carwash_services:
+                    # Release employee assigned to this add-on carwash
+                    if carwash.employee:
+                        employee = carwash.employee
+                        print(f"   🔄 Releasing employee: {employee.firstname} {employee.lastname} (ID: {employee.employee_id})")
+                        old_assignments = employee.current_assignments
+                        employee.current_assignments = max(0, employee.current_assignments - 1)
+                        if employee.current_assignments < 3:
+                            employee.availability_status = 'available'
+                        employee.save()
+                        print(f"   ✅ Employee released: {old_assignments} → {employee.current_assignments}, Status: {employee.availability_status}")
                 carwash_services.delete()
             
             booking.slot.save()
@@ -579,12 +626,6 @@ class BookingViewSet(ModelViewSet):
         if not slot.is_available:
             raise ValidationError({'slot': 'This slot is not available'})
         
-        # ✅ VEHICLE TYPE VALIDATION - Check if user's vehicle type matches slot's vehicle type
-        if user_profile.vehicle_type != slot.vehicle_type:
-            raise ValidationError({
-                'vehicle_type': f'Your vehicle type ({user_profile.vehicle_type}) is not compatible with this slot. This slot is for {slot.vehicle_type} vehicles only.'
-            })
-        
         # INSTANT BOOKING - Set times to now and now+10minutes
         now = timezone.now()
         start_time = now
@@ -611,7 +652,7 @@ class BookingViewSet(ModelViewSet):
                 slot=slot,
                 lot=slot.lot,
                 vehicle_number=serializer.validated_data.get('vehicle_number'),
-                vehicle_type=user_profile.vehicle_type,  # Store user's vehicle type with booking
+                vehicle_type=slot.vehicle_type,  # Use the slot's vehicle type, not user's
                 booking_type=serializer.validated_data.get('booking_type'),
                 start_time=start_time,
                 end_time=end_time,
@@ -927,6 +968,43 @@ class CarwashViewSet(ModelViewSet):
             return Carwash.objects.filter(booking__user=profile)
         return Carwash.objects.all()
     
+    def perform_update(self, serializer):
+        """Override update to handle employee availability when car wash is completed"""
+        carwash = self.get_object()
+        old_status = carwash.status
+        
+        # Save the updated carwash
+        updated_carwash = serializer.save()
+        new_status = updated_carwash.status
+        
+        # If car wash is completed or cancelled, free up the employee
+        if old_status != new_status and new_status in ['completed', 'cancelled']:
+            employee = updated_carwash.employee
+            if employee:
+                print(f"\n{'='*60}")
+                print(f"🔄 RELEASING EMPLOYEE (Add-on Car Wash)")
+                print(f"{'='*60}")
+                print(f"   Car Wash ID: {updated_carwash.carwash_id}")
+                print(f"   Booking ID: {updated_carwash.booking.booking_id}")
+                print(f"   Status: {old_status} → {new_status}")
+                print(f"   Employee: {employee.firstname} {employee.lastname} (ID: {employee.employee_id})")
+                
+                # Decrease employee's workload
+                old_assignments = employee.current_assignments
+                employee.current_assignments = max(0, employee.current_assignments - 1)
+                
+                # Mark employee as available if they have capacity
+                old_availability = employee.availability_status
+                if employee.current_assignments < 3:
+                    employee.availability_status = 'available'
+                
+                employee.save()
+                
+                print(f"✅ Employee released:")
+                print(f"   Assignments: {old_assignments} → {employee.current_assignments}")
+                print(f"   Availability: {old_availability} → {employee.availability_status}")
+                print(f"{'='*60}\n")
+    
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def owner_services(self, request):
         """Get all carwash services for owner's lots with full booking details"""
@@ -972,14 +1050,26 @@ class CarwashViewSet(ModelViewSet):
                 'employee'
             ).order_by('-booking__booking_time')
             
-            # Auto-complete carwashes with expired bookings
+            # Auto-complete carwashes with expired bookings and release employees
             from django.utils import timezone
             expired_carwashes = carwashes.filter(
                 booking__status='booked',
                 booking__end_time__lt=timezone.now()
             )
             for carwash in expired_carwashes:
-                print(f"⏰ Auto-completing carwash {carwash.carwash_id} with expired booking {carwash.booking.booking_id}")
+                print(f"⏰ Auto-completing add-on carwash {carwash.carwash_id} with expired booking {carwash.booking.booking_id}")
+                
+                # Release employee if assigned
+                if carwash.employee:
+                    employee = carwash.employee
+                    print(f"   🔄 Releasing employee: {employee.firstname} {employee.lastname} (ID: {employee.employee_id})")
+                    old_assignments = employee.current_assignments
+                    employee.current_assignments = max(0, employee.current_assignments - 1)
+                    if employee.current_assignments < 3:
+                        employee.availability_status = 'available'
+                    employee.save()
+                    print(f"   ✅ Employee released: {old_assignments} → {employee.current_assignments}, Status: {employee.availability_status}")
+                
                 carwash.booking.status = 'completed'
                 carwash.booking.save()
             
@@ -1102,13 +1192,24 @@ class CarwashViewSet(ModelViewSet):
             if carwash_type_id:
                 try:
                     carwash_type = Carwash_type.objects.get(carwash_type_id=carwash_type_id)
-                    print(f"🔍 Carwash type found: {carwash_type.name}")
                     
-                    # For now, assign to the first available employee
-                    # In production, this would be based on availability
-                    print(f"🔍 Looking for employee with owner: {booking.lot.owner}")
-                    employee = Employee.objects.filter(owner=booking.lot.owner).first()
-                    print(f"🔍 Employee found: {employee}")
+                    print(f"\n{'='*60}")
+                    print(f"🔍 ADD-ON CAR WASH EMPLOYEE ASSIGNMENT")
+                    print(f"{'='*60}")
+                    print(f"   Booking ID: {booking.booking_id}")
+                    print(f"   Lot: {booking.lot.lot_name}")
+                    print(f"   Owner: {booking.lot.owner.firstname} {booking.lot.owner.lastname} ({booking.lot.owner.id})")
+                    print(f"   Service Type: {carwash_type.name}")
+                    
+                    # Smart employee assignment: Find available employee with least workload
+                    available_employees = Employee.objects.filter(
+                        owner=booking.lot.owner,
+                        availability_status='available'
+                    ).order_by('current_assignments')
+                    
+                    print(f"   Available employees: {available_employees.count()}")
+                    
+                    employee = available_employees.first()
                     
                     if employee:
                         # Set carwash status based on payment status
@@ -1121,11 +1222,23 @@ class CarwashViewSet(ModelViewSet):
                             price=amount,
                             status=carwash_status
                         )
-                        print(f"✅ Car Wash booking created: {carwash.carwash_id}")
-                        print(f"   - Service: {carwash_type.name}")
-                        print(f"   - Employee: {employee.name}")
+                        
+                        # Update employee workload
+                        employee.current_assignments += 1
+                        if employee.current_assignments >= 3:  # Max 3 concurrent assignments
+                            employee.availability_status = 'busy'
+                        employee.save()
+                        
+                        print(f"✅ Employee assigned: {employee.firstname} {employee.lastname}")
+                        print(f"   Employee ID: {employee.employee_id}")
+                        print(f"   Current assignments: {employee.current_assignments}")
+                        print(f"   Status: {employee.availability_status}")
+                        print(f"✅ Add-on Car Wash created: ID={carwash.carwash_id}, Status={carwash_status}")
+                        print(f"{'='*60}\n")
                     else:
-                        print(f"⚠️ No employee found for owner {booking.lot.owner}")
+                        print(f"⚠️ No available employees found for owner {booking.lot.owner}")
+                        print(f"   All employees are currently busy or offline")
+                        print(f"{'='*60}\n")
                 except Carwash_type.DoesNotExist:
                     print(f"⚠️ Carwash type {carwash_type_id} not found, payment created without service booking")
                 except Exception as e:
@@ -1193,7 +1306,15 @@ class CarwashTypeViewSet(ModelViewSet):
 
 class EmployeeViewSet(ModelViewSet):
     serializer_class=EmployeeSerializer
-    permission_classes=[IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Allow unauthenticated POST (for employee registration)
+        Require authentication for all other operations
+        """
+        if self.action == 'create':
+            return []  # No authentication required for employee registration
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user=self.request.user
@@ -1203,7 +1324,9 @@ class EmployeeViewSet(ModelViewSet):
         if getattr(user, 'role','')=='Owner':
             try:
                 owner=OwnerProfile.objects.get(auth_user=user)
-                return Employee.objects.filter(owner=owner)
+                # Return both employees assigned to this owner AND unassigned employees
+                from django.db.models import Q
+                return Employee.objects.filter(Q(owner=owner) | Q(owner__isnull=True))
             except OwnerProfile.DoesNotExist:
                 return Employee.objects.none()
         
@@ -1212,30 +1335,74 @@ class EmployeeViewSet(ModelViewSet):
     
     def perform_update(self, serializer):
         user = self.request.user
-        # Only admin can assign employees to owners
-        if not (user.is_superuser or getattr(user, 'role', '') == 'Admin'):
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only admin can assign employees to owners")
-        serializer.save()
+        employee_id = self.kwargs.get('pk')
+        
+        try:
+            employee = Employee.objects.get(pk=employee_id)
+        except Employee.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Employee not found")
+        
+        # Admin can update any employee
+        if user.is_superuser or getattr(user, 'role', '') == 'Admin':
+            serializer.save()
+            return
+        
+        # Owner can update employees assigned to them or assign unassigned employees
+        if getattr(user, 'role', '') == 'Owner':
+            owner = OwnerProfile.objects.get(auth_user=user)
+            new_owner_id = self.request.data.get('owner')
+            
+            # If assigning to themselves from unassigned
+            if new_owner_id == owner.id and employee.owner is None:
+                serializer.save()
+                return
+            
+            # If unassigning their own employee (setting owner to null)
+            if new_owner_id is None and employee.owner == owner:
+                serializer.save()
+                return
+            
+            # If updating their own employee's other details
+            if employee.owner == owner:
+                serializer.save()
+                return
+        
+        # Otherwise, permission denied
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("You don't have permission to modify this employee")
     
     def perform_create(self, serializer):
-        user=self.request.user
-        if user.is_superuser or getattr(user,'role','')=='Admin':
-            owner_id=self.request.data.get('owner_id')
+        user = self.request.user
+        
+        # If user is not authenticated, create employee without owner (public registration)
+        if not user or not user.is_authenticated:
+            serializer.save(owner=None)  # Employee registered but not assigned to any owner
+            return
+        
+        # Admin can create and assign employee to an owner
+        if user.is_superuser or getattr(user, 'role', '') == 'Admin':
+            owner_id = self.request.data.get('owner_id')
 
             if not owner_id:
-                raise serializers.ValidationError({"owner_id": "As Admin, you must provide an owner_id field."})
+                # Admin can create unassigned employee
+                serializer.save(owner=None)
+                return
             
             try:
-                target_owner=OwnerProfile.objects.get(id=owner_id)
+                target_owner = OwnerProfile.objects.get(id=owner_id)
                 serializer.save(owner=target_owner)
-
             except OwnerProfile.DoesNotExist:
                 raise serializers.ValidationError({"owner_id": "Owner ID not found."})
-
+        
+        # Owner can create employee for themselves
+        elif getattr(user, 'role', '') == 'Owner':
+            owner = OwnerProfile.objects.get(auth_user=user)
+            serializer.save(owner=owner)
+        
+        # Default: create unassigned employee
         else:
-            owner=OwnerProfile.objects.get(auth_user=user)
-            serializer.save(owner=owner)    
+            serializer.save(owner=None)    
                 
 
 
@@ -1802,6 +1969,8 @@ class CarWashBookingViewSet(ModelViewSet):
             print(f"   payment_method: {data.get('payment_method')}")
             print(f"   payment_status: {data.get('payment_status')}")
             print(f"   status: {data.get('status')}")
+            print(f"   transaction_id: {data.get('transaction_id')}")
+            print(f"   notes: {data.get('notes')}")
             
             serializer = self.get_serializer(data=data)
             if not serializer.is_valid():
@@ -1836,12 +2005,50 @@ class CarWashBookingViewSet(ModelViewSet):
             )
     
     def perform_create(self, serializer):
-        """Save the car wash booking and schedule auto-completion"""
+        """Save the car wash booking, assign employee, and schedule auto-completion"""
         from django.utils import timezone
         from datetime import timedelta
         import threading
         
         booking = serializer.save()
+        
+        # Smart employee assignment: Find available employee with least workload
+        try:
+            print(f"\n🔍 EMPLOYEE ASSIGNMENT FOR BOOKING {booking.carwash_booking_id}")
+            print(f"   Lot: {booking.lot.lot_name}")
+            print(f"   Owner: {booking.lot.owner}")
+            
+            available_employees = Employee.objects.filter(
+                owner=booking.lot.owner,
+                availability_status='available'
+            ).order_by('current_assignments')
+            
+            print(f"   Available employees: {available_employees.count()}")
+            
+            employee = available_employees.first()
+            
+            if employee:
+                # Assign employee to booking
+                booking.employee = employee
+                booking.save()
+                
+                # Update employee workload
+                employee.current_assignments += 1
+                if employee.current_assignments >= 3:  # Max 3 concurrent assignments
+                    employee.availability_status = 'busy'
+                employee.save()
+                
+                print(f"✅ Employee assigned: {employee.firstname} {employee.lastname}")
+                print(f"   Employee ID: {employee.employee_id}")
+                print(f"   Current assignments: {employee.current_assignments}")
+                print(f"   Status: {employee.availability_status}")
+            else:
+                print(f"⚠️ No available employees found")
+                print(f"   All employees are busy or offline")
+        except Exception as e:
+            print(f"❌ Employee assignment failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
         # Schedule auto-completion after 5 minutes for verified payments
         if booking.payment_status == 'verified':
@@ -1895,6 +2102,32 @@ class CarWashBookingViewSet(ModelViewSet):
             completion_thread = threading.Thread(target=auto_complete_booking, daemon=True)
             completion_thread.start()
             print(f"⏰ Scheduled auto-completion for booking {booking.carwash_booking_id} in 5 minutes")
+    
+    def perform_update(self, serializer):
+        """Handle employee workload when booking status changes"""
+        booking = self.get_object()
+        old_status = booking.status
+        
+        updated_booking = serializer.save()
+        new_status = updated_booking.status
+        
+        # Release employee when booking is completed or cancelled
+        if old_status != new_status and new_status in ['completed', 'cancelled']:
+            employee = updated_booking.employee
+            if employee:
+                print(f"\n🔄 RELEASING EMPLOYEE {employee.employee_id}")
+                print(f"   Booking: {updated_booking.carwash_booking_id}")
+                print(f"   Status change: {old_status} → {new_status}")
+                print(f"   Current assignments: {employee.current_assignments}")
+                
+                employee.current_assignments = max(0, employee.current_assignments - 1)
+                if employee.current_assignments < 3:
+                    employee.availability_status = 'available'
+                employee.save()
+                
+                print(f"✅ Employee released")
+                print(f"   New assignments: {employee.current_assignments}")
+                print(f"   New status: {employee.availability_status}\n")
     
     @action(detail=False, methods=['GET'])
     def available_time_slots(self, request):
@@ -2117,6 +2350,32 @@ class OwnerCarWashBookingViewSet(ModelViewSet):
             return CarWashBooking.objects.filter(lot__in=owner_lots).order_by('-booking_time')
         except OwnerProfile.DoesNotExist:
             return CarWashBooking.objects.none()
+    
+    def perform_update(self, serializer):
+        """Handle employee workload when booking status changes"""
+        booking = self.get_object()
+        old_status = booking.status
+        
+        updated_booking = serializer.save()
+        new_status = updated_booking.status
+        
+        # Release employee when booking is completed or cancelled
+        if old_status != new_status and new_status in ['completed', 'cancelled']:
+            employee = updated_booking.employee
+            if employee:
+                print(f"\n🔄 RELEASING EMPLOYEE {employee.employee_id}")
+                print(f"   Booking: {updated_booking.carwash_booking_id}")
+                print(f"   Status change: {old_status} → {new_status}")
+                print(f"   Current assignments: {employee.current_assignments}")
+                
+                employee.current_assignments = max(0, employee.current_assignments - 1)
+                if employee.current_assignments < 3:
+                    employee.availability_status = 'available'
+                employee.save()
+                
+                print(f"✅ Employee released")
+                print(f"   New assignments: {employee.current_assignments}")
+                print(f"   New status: {employee.availability_status}\n")
     
     @action(detail=False, methods=['get'], url_path='dashboard', permission_classes=[permissions.IsAuthenticated])
     def dashboard(self, request):

@@ -309,7 +309,10 @@ export const AuthProvider = ({ children }) => {
             const response = await authService.registerUser(userData);
             return { success: true, data: response };
         } catch (error) {
-            console.error('Registration error:', error);
+            console.error('❌ Registration error:', error);
+            console.error('❌ Error response:', error.response);
+            console.error('❌ Error data:', error.response?.data);
+            console.error('❌ Error status:', error.response?.status);
             return { 
                 success: false, 
                 error: error.response?.data || 'Registration failed. Please try again.' 

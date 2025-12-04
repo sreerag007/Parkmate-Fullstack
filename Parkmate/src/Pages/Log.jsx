@@ -256,7 +256,7 @@ export default function Log() {
                 <option value="Three-Wheeler">Three-Wheeler</option>
                 <option value="Hatchback">Hatchback</option>
                 <option value="Sedan">Sedan</option>
-                <option value="SUV">SUV</option>
+                <option value="Multi-Axle">Multi-Axle</option>
               </select>
             </label>
 

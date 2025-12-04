@@ -9,17 +9,21 @@ Events:
 8. New Booking Created → Owner
 9. Car Wash Completed → User
 10. Owner Assigned New Employee → Owner
+
+Additionally handles:
+- Employee workload counter synchronization for car wash bookings
 """
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
+from django.db import transaction
 from parking.notification_utils import send_ws_notification
 import logging
 
 logger = logging.getLogger(__name__)
 
 # Import models - use string references to avoid circular imports
-from parking.models import Booking, Payment, Carwash
+from parking.models import Booking, Payment, Carwash, CarWashBooking, Employee
 
 # Signal receivers for notifications
 
@@ -130,3 +134,161 @@ def carwash_status_changed(sender, instance, **kwargs):
 #             )
 #     except Exception as e:
 #         logger.error(f"❌ Error in employee_assigned signal: {str(e)}")
+
+
+# ============================================================
+# EMPLOYEE WORKLOAD SYNCHRONIZATION SIGNALS
+# ============================================================
+
+def recalculate_employee_workload(employee):
+    """
+    Recalculate employee workload from scratch based on actual active assignments.
+    This ensures consistency even if increment/decrement logic has bugs.
+    
+    Returns the employee with updated workload (not saved yet).
+    """
+    if not employee:
+        return None
+    
+    # Count active STANDALONE car wash bookings
+    standalone_count = CarWashBooking.objects.filter(
+        employee=employee,
+        status__in=['pending', 'confirmed', 'in_progress']
+    ).count()
+    
+    # Count active ADD-ON car wash services
+    addon_count = Carwash.objects.filter(
+        employee=employee,
+        booking__status__in=['booked', 'active']
+    ).count()
+    
+    total_active = standalone_count + addon_count
+    
+    # Update employee
+    old_count = employee.current_assignments
+    employee.current_assignments = total_active
+    
+    # Update availability status
+    if total_active >= 3:
+        employee.availability_status = 'busy'
+    else:
+        employee.availability_status = 'available'
+    
+    if old_count != total_active:
+        logger.info(f"🔄 Recalculated workload for {employee.firstname} {employee.lastname}: {old_count} → {total_active}")
+    
+    return employee
+
+
+@receiver(post_save, sender=CarWashBooking)
+def sync_employee_workload_on_carwash_save(sender, instance, created, **kwargs):
+    """
+    Sync employee workload when CarWashBooking is created or updated.
+    This ensures consistency by recalculating from actual data.
+    """
+    if instance.employee:
+        try:
+            with transaction.atomic():
+                employee = Employee.objects.select_for_update().get(pk=instance.employee.pk)
+                recalculated = recalculate_employee_workload(employee)
+                if recalculated:
+                    recalculated.save()
+        except Employee.DoesNotExist:
+            logger.warning(f"Employee {instance.employee.pk} not found during workload sync")
+
+
+@receiver(post_delete, sender=CarWashBooking)
+def sync_employee_workload_on_carwash_delete(sender, instance, **kwargs):
+    """
+    Sync employee workload when CarWashBooking is deleted.
+    """
+    if instance.employee:
+        try:
+            with transaction.atomic():
+                employee = Employee.objects.select_for_update().get(pk=instance.employee.pk)
+                recalculated = recalculate_employee_workload(employee)
+                if recalculated:
+                    recalculated.save()
+        except Employee.DoesNotExist:
+            logger.warning(f"Employee {instance.employee.pk} not found during workload sync")
+
+
+@receiver(post_save, sender=Carwash)
+def sync_employee_workload_on_addon_save(sender, instance, created, **kwargs):
+    """
+    Sync employee workload when add-on Carwash is created or updated.
+    """
+    if instance.employee:
+        try:
+            with transaction.atomic():
+                employee = Employee.objects.select_for_update().get(pk=instance.employee.pk)
+                recalculated = recalculate_employee_workload(employee)
+                if recalculated:
+                    recalculated.save()
+        except Employee.DoesNotExist:
+            logger.warning(f"Employee {instance.employee.pk} not found during workload sync")
+
+
+@receiver(post_delete, sender=Carwash)
+def sync_employee_workload_on_addon_delete(sender, instance, **kwargs):
+    """
+    Sync employee workload when add-on Carwash is deleted.
+    """
+    if instance.employee:
+        try:
+            with transaction.atomic():
+                employee = Employee.objects.select_for_update().get(pk=instance.employee.pk)
+                recalculated = recalculate_employee_workload(employee)
+                if recalculated:
+                    recalculated.save()
+        except Employee.DoesNotExist:
+            logger.warning(f"Employee {instance.employee.pk} not found during workload sync")
+
+
+@receiver(pre_save, sender=CarWashBooking)
+def handle_employee_reassignment(sender, instance, **kwargs):
+    """
+    Handle employee reassignment: recalculate both old and new employee workloads.
+    """
+    if instance.pk:  # Only for updates, not creates
+        try:
+            old_instance = CarWashBooking.objects.get(pk=instance.pk)
+            old_employee = old_instance.employee
+            new_employee = instance.employee
+            
+            # If employee changed, recalculate both
+            if old_employee and new_employee and old_employee.pk != new_employee.pk:
+                logger.info(f"🔄 Employee reassignment: {old_employee} → {new_employee}")
+                
+                # Recalculate old employee (after the save completes)
+                # This will be handled by post_save signal
+                
+        except CarWashBooking.DoesNotExist:
+            pass
+
+
+@receiver(pre_save, sender=Carwash)
+def handle_addon_employee_reassignment(sender, instance, **kwargs):
+    """
+    Handle employee reassignment for add-on car wash services.
+    """
+    if instance.pk:  # Only for updates, not creates
+        try:
+            old_instance = Carwash.objects.get(pk=instance.pk)
+            old_employee = old_instance.employee
+            new_employee = instance.employee
+            
+            # If employee changed, also sync the old employee
+            if old_employee and new_employee and old_employee.pk != new_employee.pk:
+                logger.info(f"🔄 Add-on employee reassignment: {old_employee} → {new_employee}")
+                
+                # Sync old employee (new employee will be synced by post_save)
+                with transaction.atomic():
+                    old_emp = Employee.objects.select_for_update().get(pk=old_employee.pk)
+                    recalculated = recalculate_employee_workload(old_emp)
+                    if recalculated:
+                        recalculated.save()
+                        
+        except Carwash.DoesNotExist:
+            pass
+

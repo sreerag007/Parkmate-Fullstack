@@ -36,12 +36,12 @@ const DynamicLot = () => {
     const [slots, setSlots] = useState([]);
     const [selected, setSelected] = useState(null);
     const [payment, setPayment] = useState('CC');
-    const [vehicleType, setVehicleType] = useState('Hatchback');
+    const [selectedVehicleType, setSelectedVehicleType] = useState('All'); // Dynamic vehicle type filter
     const [userVehicleType, setUserVehicleType] = useState(null); // User's registered vehicle type
-    const [showAllSlots, setShowAllSlots] = useState(false); // Toggle to show all or only compatible slots
     const [bookingType, setBookingType] = useState('Instant');
     const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
+    const [loadingSlots, setLoadingSlots] = useState(false); // Loading state for slot filtering
     const [error, setError] = useState(null);
     const [_NOW, setNow] = useState(Date.now());
     const [_SHOW_BOOKING_CONFIRM, _SET_SHOW_BOOKING_CONFIRM] = useState(false);
@@ -50,33 +50,32 @@ const DynamicLot = () => {
     const timeoutsRef = useRef({});
     const refreshIntervalRef = useRef(null);
 
-    // Function to refresh slots from backend
-    const refreshSlots = async () => {
+    // Function to refresh slots from backend with optional filters
+    const refreshSlots = async (vehicleTypeFilter = selectedVehicleType) => {
         try {
+            setLoadingSlots(true);
             console.log('🔄 Refreshing slots from backend...');
+            console.log('🔍 Vehicle type filter:', vehicleTypeFilter);
+            console.log('🔍 Lot ID:', lotId);
             
-            // Fetch slots for this lot
-            const allSlots = await parkingService.getSlots();
-            console.log('🔍 All slots from API:', allSlots);
-            console.log('🔍 Looking for slots with lot_detail.lot_id =', parseInt(lotId));
+            // Build query parameters
+            const params = {
+                lot_id: lotId
+            };
             
-            const lotSlots = allSlots.filter(slot => {
-                return slot.lot_detail?.lot_id === parseInt(lotId);
-            });
-            console.log('🔍 Refreshed slots for this lot:', lotSlots);
-            
-            // Check for any booked slots
-            const bookedSlots = lotSlots.filter(s => s.booking);
-            console.log(`📊 Total slots: ${lotSlots.length}, Booked slots: ${bookedSlots.length}`);
-            if (bookedSlots.length > 0) {
-                console.log('📊 Booked slot details:');
-                bookedSlots.forEach(s => {
-                    console.log(`  - Slot #${s.slot_id}: booking_id=${s.booking.booking_id}, status=${s.booking.status}, end_time=${s.booking.end_time}, is_available=${s.is_available}`);
-                });
+            // Add vehicle type filter if not "All"
+            if (vehicleTypeFilter && vehicleTypeFilter !== 'All') {
+                params.vehicle_type = vehicleTypeFilter;
             }
             
+            console.log('📤 Request params:', params);
+            
+            // Fetch slots with filters
+            const filteredSlots = await parkingService.getSlots(params);
+            console.log('🔍 Filtered slots from API:', filteredSlots);
+            
             // Map backend slots to frontend format
-            const mappedSlots = lotSlots.map(slot => ({
+            const mappedSlots = filteredSlots.map(slot => ({
                 id: slot.slot_id,
                 backendId: slot.slot_id,
                 slotNumber: slot.slot_id,
@@ -87,11 +86,13 @@ const DynamicLot = () => {
                 booking: slot.booking, // Store full booking object with end_time
                 bookedAt: slot.booking ? new Date(slot.booking.end_time).getTime() - (3600 * 1000) : null // Calculate initial bookedAt
             }));
-            console.log('🔍 Mapped refreshed slots:', mappedSlots);
+            console.log('🔍 Mapped filtered slots:', mappedSlots);
 
             setSlots(mappedSlots);
         } catch (err) {
             console.error('❌ Error refreshing slots:', err);
+        } finally {
+            setLoadingSlots(false);
         }
     };
 
@@ -104,23 +105,26 @@ const DynamicLot = () => {
 
                 console.log('🔍 Loading data for lot ID:', lotId);
 
-                // Fetch user profile to get vehicle type
+                // Fetch user profile to get vehicle type (for display only)
                 try {
                     const userProfile = await parkingService.getUserProfile();
                     console.log('🚗 User vehicle type:', userProfile.vehicle_type);
                     setUserVehicleType(userProfile.vehicle_type);
-                    setVehicleType(userProfile.vehicle_type); // Set default vehicle type to user's
                 } catch (err) {
                     console.error('⚠️ Could not fetch user vehicle type:', err);
                 }
+
+                // Set default filter to 'All'
+                setSelectedVehicleType('All');
 
                 // Fetch lot details
                 const lot = await parkingService.getLotById(lotId);
                 console.log('🔍 Lot details:', lot);
                 setLotInfo(lot);
 
-                // Load slots
-                await refreshSlots();
+                // Load all slots (no vehicle type filter)
+                console.log('🔍 Initial load with vehicle type: All');
+                await refreshSlots('All');
             } catch (err) {
                 console.error('❌ Error loading lot data:', err);
                 console.error('❌ Error response:', err.response?.data);
@@ -143,6 +147,14 @@ const DynamicLot = () => {
             }
         };
     }, [lotId]);
+
+    // Refresh slots when vehicle type filter changes
+    useEffect(() => {
+        if (lotInfo) { // Only refresh if lot data is loaded
+            console.log('🔄 Vehicle type changed to:', selectedVehicleType);
+            refreshSlots(selectedVehicleType);
+        }
+    }, [selectedVehicleType]);
 
     // Clock tick
     useEffect(() => {
@@ -320,7 +332,7 @@ const DynamicLot = () => {
             
             // Update local slot status
             setSlots((prev) =>
-                prev.map((s) => (s.id === selected ? { ...s, isAvailable: false, bookedAt: Date.now(), vehicleType } : s))
+                prev.map((s) => (s.id === selected ? { ...s, isAvailable: false, bookedAt: Date.now() } : s))
             );
 
             setSelected(null);
@@ -333,7 +345,19 @@ const DynamicLot = () => {
             if (err.response) {
                 console.error('Error status:', err.response.status);
                 console.error('Error data:', err.response.data);
-                const errorMsg = err.response.data?.detail || err.response.data?.slot?.[0] || err.response.data?.vehicle_number?.[0] || err.response.data?.booking_type?.[0] || err.response.data?.start_time?.[0] || 'Unknown error';
+                console.error('Full error response:', JSON.stringify(err.response.data, null, 2));
+                
+                // Extract error message
+                let errorMsg = 'Unknown error';
+                if (err.response.data) {
+                    // Try different error formats
+                    errorMsg = err.response.data?.detail 
+                        || err.response.data?.slot?.[0] 
+                        || err.response.data?.vehicle_number?.[0] 
+                        || err.response.data?.booking_type?.[0] 
+                        || err.response.data?.start_time?.[0]
+                        || JSON.stringify(err.response.data);
+                }
                 alert(`Failed to book slot: ${errorMsg}`);
             } else {
                 alert('Failed to book slot. Please try again.');
@@ -412,55 +436,132 @@ const DynamicLot = () => {
 
             <p className="lot-desc">Select an available slot below. Bookings last 1 hour and will expire automatically.</p>
 
-            {userVehicleType && (
-                <div style={{ 
-                    padding: '12px 16px', 
-                    background: '#f0f9ff', 
-                    borderRadius: '8px', 
-                    marginBottom: '16px',
-                    border: '1px solid #0ea5e9'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                            <strong>🚗 Your Vehicle:</strong> {userVehicleType}
-                            {!showAllSlots && <span style={{ marginLeft: '8px', color: '#0ea5e9' }}>• Showing compatible slots only</span>}
-                        </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                            <input 
-                                type="checkbox" 
-                                checked={showAllSlots} 
-                                onChange={(e) => setShowAllSlots(e.target.checked)}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            Show all slots
+            {/* Dynamic Vehicle Type Filter */}
+            <div style={{ 
+                padding: '16px', 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                borderRadius: '12px', 
+                marginBottom: '20px',
+                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.2)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1', minWidth: '200px' }}>
+                        <label style={{ 
+                            display: 'block', 
+                            color: '#fff', 
+                            fontWeight: '600', 
+                            marginBottom: '8px',
+                            fontSize: '0.95rem'
+                        }}>
+                            🚗 Filter by Vehicle Type
                         </label>
+                        <select 
+                            value={selectedVehicleType} 
+                            onChange={(e) => {
+                                setSelectedVehicleType(e.target.value);
+                                setSelected(null); // Clear selection when filter changes
+                            }}
+                            disabled={loadingSlots}
+                            style={{ 
+                                width: '100%', 
+                                padding: '12px 16px', 
+                                borderRadius: '8px', 
+                                border: 'none',
+                                fontSize: '1rem',
+                                fontWeight: '500',
+                                background: '#fff',
+                                cursor: loadingSlots ? 'wait' : 'pointer',
+                                opacity: loadingSlots ? 0.6 : 1
+                            }}
+                        >
+                            <option value="All">🔍 All Types</option>
+                            <option value="Hatchback">🚗 Hatchback</option>
+                            <option value="Sedan">🚙 Sedan</option>
+                            <option value="Multi-Axle">🚚 Multi-Axle</option>
+                            <option value="Three-Wheeler">🛺 Three-Wheeler</option>
+                            <option value="Two-Wheeler">🏍️ Two-Wheeler</option>
+                        </select>
+                    </div>
+                    
+                    <div style={{ 
+                        flex: '1', 
+                        minWidth: '200px',
+                        color: '#fff',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        borderRadius: '8px',
+                        backdropFilter: 'blur(10px)'
+                    }}>
+                        <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '4px' }}>
+                            {userVehicleType && (
+                                <span>Your vehicle: <strong>{userVehicleType}</strong></span>
+                            )}
+                        </div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '600' }}>
+                            {loadingSlots ? (
+                                <span>⏳ Loading slots...</span>
+                            ) : (
+                                <span>
+                                    Showing: <strong>{selectedVehicleType === 'All' ? 'All vehicle types' : selectedVehicleType}</strong>
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
-            )}
+            </div>
+
+            {/* Slots Grid */}
+            {loadingSlots ? (
+                <div style={{ 
+                    textAlign: 'center', 
+                    padding: '40px', 
+                    background: '#f8fafc', 
+                    borderRadius: '12px',
+                    border: '2px dashed #cbd5e1'
+                }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+                    <p style={{ color: '#64748b', fontWeight: '500' }}>Loading slots...</p>
+                </div>
+            ) : slots.length === 0 ? (
+                <div style={{ 
+                    textAlign: 'center', 
+                    padding: '40px', 
+                    background: '#fef2f2', 
+                    borderRadius: '12px',
+                    border: '2px dashed #fca5a5'
+                }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🚫</div>
+                    <p style={{ color: '#dc2626', fontWeight: '600', fontSize: '1.1rem' }}>
+                        No slots available for {selectedVehicleType === 'All' ? 'this lot' : selectedVehicleType}
+                    </p>
+                    {selectedVehicleType !== 'All' && (
+                        <button
+                            onClick={() => setSelectedVehicleType('All')}
+                            style={{
+                                marginTop: '16px',
+                                padding: '10px 20px',
+                                background: '#3b82f6',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: '600',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Show All Vehicle Types
+                        </button>
+                    )}
+                </div>
+            ) : null}
 
             <div className="slots-grid">
-                {slots.length === 0 ? (
-                    <p>No slots available for this lot.</p>
-                ) : (
-                    slots
-                        .filter(s => {
-                            // Filter by vehicle type if user has one and showAllSlots is false
-                            if (userVehicleType && !showAllSlots) {
-                                return s.vehicleType === userVehicleType;
-                            }
-                            return true;
-                        })
-                        .map((s) => {
+                {!loadingSlots && slots.length > 0 && slots.map((s) => {
                         // ✅ Calculate remaining time from backend end_time instead of local bookedAt
                         let remaining = null;
                         let isExpired = false;
                         let isCancelledOrCompleted = false;
                         let displayStatus = 'available';
                         let statusLabel = `Available - ₹${s.price}/hr`;
-                        
-                        // Check vehicle compatibility
-                        const isCompatible = !userVehicleType || s.vehicleType === userVehicleType;
-                        const vehicleTypeLabel = s.vehicleType ? ` (${s.vehicleType})` : '';
                         
                         // 🔥 PRIMARY CHECK: If there's a booking object, the slot is occupied
                         if (s.booking && s.booking.end_time) {
@@ -495,48 +596,41 @@ const DynamicLot = () => {
                             }
                         }
                         
-                        // ✅ Slot is booked only if:
-                        // - displayStatus is 'booked' or 'scheduled'
+                        // ✅ Slot is booked only if displayStatus is 'booked' or 'scheduled'
                         const isBooked = (displayStatus === 'booked' || displayStatus === 'scheduled');
                         const displayAsAvailable = !isBooked;
-                        
-                        // Disable slot if booked OR incompatible vehicle type
-                        const isDisabled = isBooked || !isCompatible;
                         
                         return (
                             <button
                                 key={s.id}
-                                className={`slot ${displayStatus} ${selected === s.id && displayAsAvailable && isCompatible ? 'selected' : ''} ${!isCompatible ? 'incompatible' : ''}`}
-                                onClick={() => isCompatible && selectSlot(s.id)}
-                                disabled={isDisabled}
-                                title={`Slot #${s.slotNumber} - ${displayStatus.toUpperCase()}${vehicleTypeLabel}${!isCompatible ? ' - Incompatible with your vehicle' : ''}`}
+                                className={`slot ${displayStatus} ${selected === s.id && displayAsAvailable ? 'selected' : ''}`}
+                                onClick={() => selectSlot(s.id)}
+                                disabled={isBooked}
+                                title={`Slot #${s.slotNumber} - ${displayStatus.toUpperCase()} - ${s.vehicleType}`}
                             >
                                 <div className="slot-id">
                                     #{s.slotNumber}
-                                    {!isCompatible && <span style={{ marginLeft: '4px', fontSize: '10px' }}>🚫</span>}
+                                    <span style={{ marginLeft: '6px', fontSize: '11px', opacity: 0.8 }}>
+                                        {s.vehicleType === 'Hatchback' && '🚗'}
+                                        {s.vehicleType === 'Sedan' && '🚙'}
+                                        {s.vehicleType === 'Multi-Axle' && '🚚'}
+                                        {s.vehicleType === 'Three-Wheeler' && '🛺'}
+                                        {s.vehicleType === 'Two-Wheeler' && '🏍️'}
+                                    </span>
                                 </div>
                                 <div className="slot-state">
                                     {statusLabel}
-                                    {!isCompatible && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>{s.vehicleType}</div>}
+                                    <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.7 }}>
+                                        {s.vehicleType}
+                                    </div>
                                 </div>
                             </button>
                         );
                     })
-                )}
+                }
             </div>
 
             <div className="controls">
-                <div className="vehicle-choice">
-                    <label>Vehicle Type</label>
-                    <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}>
-                        <option value="Hatchback">Hatchback</option>
-                        <option value="Sedan">Sedan</option>
-                        <option value="SUV">SUV</option>
-                        <option value="Three Wheeler">Three Wheeler</option>
-                        <option value="Two Wheeler">Two Wheeler</option>
-                    </select>
-                </div>
-
                 <div className="payment-choice">
                     <label>Payment Method</label>
                     <div>

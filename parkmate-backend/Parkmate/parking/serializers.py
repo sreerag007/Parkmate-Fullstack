@@ -595,6 +595,11 @@ class CarwashTypeSerializer(serializers.ModelSerializer):
 # Employee serializer
 class EmployeeSerializer(serializers.ModelSerializer):
     owner_detail = serializers.SerializerMethodField(read_only=True)
+    owner = serializers.PrimaryKeyRelatedField(
+        queryset=OwnerProfile.objects.all(),
+        required=False,
+        allow_null=True
+    )
     
     class Meta:
         model = Employee
@@ -609,9 +614,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "driving_license_image",
             "owner",
             "owner_detail",
+            "availability_status",
+            "current_assignments",
         ]
 
-        read_only_fields = ["employee_id"]
+        read_only_fields = ["employee_id", "current_assignments"]
     
     def get_owner_detail(self, obj):
         if obj.owner:
@@ -835,10 +842,11 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
     """
     Serializer for CarWashBooking model.
     Handles creation, update, and retrieval of car wash bookings.
-    Includes nested user and lot details for read operations.
+    Includes nested user, lot, and employee details for read operations.
     """
     user_detail = serializers.SerializerMethodField()
     lot_detail = serializers.SerializerMethodField()
+    employee_detail = serializers.SerializerMethodField()
     
     class Meta:
         model = CarWashBooking
@@ -848,6 +856,8 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
             'user_detail',
             'lot',
             'lot_detail',
+            'employee',
+            'employee_detail',
             'service_type',
             'price',
             'payment_method',
@@ -865,10 +875,43 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
             'carwash_booking_id',
             'user_detail',
             'lot_detail',
+            'employee_detail',
             'booking_time',
             'created_at',
             'updated_at',
         ]
+    
+    def validate_scheduled_time(self, value):
+        """
+        Validate that scheduled time is within 7-day booking window.
+        Bookings are only allowed from today up to 7 days in the future.
+        """
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        
+        # Convert scheduled_time to date for comparison
+        scheduled_date = value.date() if isinstance(value, datetime) else value
+        
+        # Get today's date
+        today = timezone.now().date()
+        
+        # Calculate max allowed date (today + 7 days)
+        max_date = today + timedelta(days=7)
+        
+        # Validate booking is not in the past
+        if scheduled_date < today:
+            raise serializers.ValidationError(
+                "Cannot book car wash services for past dates. Please select today or a future date."
+            )
+        
+        # Validate booking is within 7-day window
+        if scheduled_date > max_date:
+            raise serializers.ValidationError(
+                f"Bookings are only allowed within 7 days from today. "
+                f"Please select a date between {today.strftime('%Y-%m-%d')} and {max_date.strftime('%Y-%m-%d')}."
+            )
+        
+        return value
     
     def get_user_detail(self, obj):
         """Return nested user details"""
@@ -878,6 +921,19 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
             'lastname': obj.user.lastname,
             'phone': obj.user.phone,
         }
+    
+    def get_employee_detail(self, obj):
+        """Return nested employee details"""
+        if obj.employee:
+            return {
+                'employee_id': obj.employee.employee_id,
+                'firstname': obj.employee.firstname,
+                'lastname': obj.employee.lastname,
+                'phone': obj.employee.phone,
+                'availability_status': obj.employee.availability_status,
+                'current_assignments': obj.employee.current_assignments,
+            }
+        return None
     
     def get_lot_detail(self, obj):
         """Return nested lot details"""

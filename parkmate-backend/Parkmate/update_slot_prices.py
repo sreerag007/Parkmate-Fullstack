@@ -11,7 +11,7 @@ from decimal import Decimal
 pricing = {
     'Sedan': Decimal('50.00'),
     'Hatchback': Decimal('50.00'),
-    'SUV': Decimal('50.00'),
+    'Multi-Axle': Decimal('50.00'),
     'Three-Wheeler': Decimal('20.00'),
     'Two-Wheeler': Decimal('10.00')
 }

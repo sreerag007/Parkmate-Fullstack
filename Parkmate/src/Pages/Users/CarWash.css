@@ -928,7 +928,16 @@
   opacity: 0.75;
 }
 
-.time-slot.disabled:hover {
+.time-slot.past {
+  border-color: #e5e7eb;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.time-slot.disabled:hover,
+.time-slot.past:hover {
   transform: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }

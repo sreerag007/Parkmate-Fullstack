@@ -21,7 +21,7 @@ vehicle_regex = RegexValidator(
 VEHICLE_CHOICES=[
     ('Hatchback','Hatchback'),
     ('Sedan','Sedan'),
-    ('SUV','SUV'),
+    ('Multi-Axle','Multi-Axle'),
     ('Three-Wheeler','Three-Wheeler'),
     ('Two-Wheeler','Two-Wheeler')
     ]
@@ -148,6 +148,12 @@ class P_Slot(models.Model):
         db_table='PARKING_SLOT'
 
 class Employee(models.Model):
+    AVAILABILITY_CHOICES = [
+        ('available', 'Available'),
+        ('busy', 'Busy'),
+        ('offline', 'Offline'),
+    ]
+    
     employee_id=models.AutoField(primary_key=True)
     firstname=models.CharField(max_length=100)
     lastname=models.CharField(max_length=100)
@@ -156,7 +162,9 @@ class Employee(models.Model):
     longitude=models.DecimalField(max_digits=9,decimal_places=6,help_text="Latitude for employee pin",null=True,blank=True)
     driving_license=models.CharField(max_length=100,help_text="Driving License Number")
     driving_license_image=models.ImageField(upload_to='employee_licenses',null=True,blank=True,help_text='Image of the Driving License')
-    owner=models.ForeignKey(to=OwnerProfile,on_delete=models.CASCADE,db_column='owner_id',related_name='employees')
+    owner=models.ForeignKey(to=OwnerProfile,on_delete=models.CASCADE,db_column='owner_id',related_name='employees',null=True,blank=True)
+    availability_status=models.CharField(max_length=20,choices=AVAILABILITY_CHOICES,default='available',help_text='Employee availability status')
+    current_assignments=models.IntegerField(default=0,help_text='Number of active car wash assignments')
 
     def __str__(self):
         return f"{self.firstname} {self.lastname}"
@@ -335,6 +343,7 @@ class CarWashBooking(models.Model):
     carwash_booking_id = models.AutoField(primary_key=True)
     user = models.ForeignKey(to=UserProfile, on_delete=models.CASCADE, db_column='user_id', related_name='carwash_bookings')
     lot = models.ForeignKey(to=P_Lot, on_delete=models.SET_NULL, null=True, blank=True, db_column='lot_id', related_name='carwash_bookings', help_text="Optional parking lot for car wash")
+    employee = models.ForeignKey(to='Employee', on_delete=models.SET_NULL, null=True, blank=True, db_column='employee_id', related_name='carwash_assignments', help_text="Employee assigned to this car wash")
     service_type = models.CharField(max_length=50, choices=WASH_TYPE_CHOICES, default='Full Service', help_text="Type of car wash service")
     price = models.DecimalField(max_digits=8, decimal_places=2, default=0.00, help_text="Booking price")
     payment_method = models.CharField(max_length=100, choices=PAYMENT_CHOICES, help_text="Payment method used")

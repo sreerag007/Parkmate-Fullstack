@@ -122,6 +122,8 @@ const OwnerCarWash = () => {
       if (response) {
         toast.success('Cash payment verified successfully!')
         await refreshBookings()
+        // Switch to 'all' filter to keep showing the booking
+        setFilter('all')
       }
     } catch (error) {
       console.error('Error verifying payment:', error)
@@ -136,6 +138,8 @@ const OwnerCarWash = () => {
       if (response) {
         toast.success('Booking confirmed successfully!')
         await refreshBookings()
+        // Switch to 'all' filter to keep showing the booking
+        setFilter('all')
       }
     } catch (error) {
       console.error('Error confirming booking:', error)
@@ -162,6 +166,8 @@ const OwnerCarWash = () => {
       if (response) {
         toast.success(`Booking ${newStatus} successfully!`)
         await refreshBookings()
+        // Switch to 'all' filter to keep showing the booking
+        setFilter('all')
       }
     } catch (error) {
       console.error('Error updating booking:', error)
@@ -264,6 +270,12 @@ const OwnerCarWash = () => {
             onClick={() => setFilter('completed')}
           >
             Completed ({bookings.filter((b) => b.status === 'completed').length})
+          </button>
+          <button
+            className={`filter-btn ${filter === 'cancelled' ? 'active' : ''}`}
+            onClick={() => setFilter('cancelled')}
+          >
+            Cancelled ({bookings.filter((b) => b.status === 'cancelled').length})
           </button>
         </div>
       </div>

@@ -8,7 +8,7 @@ const OwnerServices = () => {
     const [carwashes, setCarwashes] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [filter, setFilter] = useState('all') // all, booked, completed, cancelled
+    const [filter, setFilter] = useState('booked') // Default to 'booked' view
     const [selectedService, setSelectedService] = useState(null)
     const [showDetailsModal, setShowDetailsModal] = useState(false)
     const refreshIntervalRef = useRef(null)
@@ -156,25 +156,32 @@ const OwnerServices = () => {
             </div>
 
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['all', 'booked', 'completed', 'cancelled'].map(status => (
-                    <button 
-                        key={status}
-                        className={`filter-btn ${filter === status ? 'active' : ''}`} 
-                        onClick={() => setFilter(status)}
-                        style={{
-                            padding: '10px 16px',
-                            borderRadius: '8px',
-                            border: filter === status ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                            background: filter === status ? '#eff6ff' : '#fff',
-                            color: filter === status ? '#3b82f6' : '#64748b',
-                            cursor: 'pointer',
-                            fontWeight: filter === status ? '600' : '500',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        {status.charAt(0).toUpperCase() + status.slice(1)} ({carwashes.filter(c => filter === 'all' || c.booking_read?.status?.toLowerCase() === status.toLowerCase()).length})
-                    </button>
-                ))}
+                {['all', 'booked', 'completed', 'cancelled'].map(status => {
+                    // Calculate correct count for each status
+                    const count = status === 'all' 
+                        ? carwashes.length 
+                        : carwashes.filter(c => c.booking_read?.status?.toLowerCase() === status.toLowerCase()).length
+                    
+                    return (
+                        <button 
+                            key={status}
+                            className={`filter-btn ${filter === status ? 'active' : ''}`} 
+                            onClick={() => setFilter(status)}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: '8px',
+                                border: filter === status ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                                background: filter === status ? '#eff6ff' : '#fff',
+                                color: filter === status ? '#3b82f6' : '#64748b',
+                                cursor: 'pointer',
+                                fontWeight: filter === status ? '600' : '500',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {status.charAt(0).toUpperCase() + status.slice(1)} ({count})
+                        </button>
+                    )
+                })}
             </div>
 
             <div className="services-grid">
