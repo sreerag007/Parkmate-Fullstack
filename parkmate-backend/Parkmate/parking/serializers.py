@@ -442,10 +442,17 @@ class BookingSerializer(serializers.ModelSerializer):
         """Calculate total amount (slot price + carwash price if exists)"""
         total = float(obj.price) if obj.price else 0.0
         
-        # Add carwash price if exists
-        carwash = obj.booking_by_user.first()
-        if carwash and carwash.price:
-            total += float(carwash.price)
+        # Add carwash price if exists (should only be one active/pending carwash)
+        active_carwashes = obj.booking_by_user.filter(status__in=['active', 'pending'])
+        if active_carwashes.exists():
+            # Only add the first carwash price (there should only be one)
+            carwash = active_carwashes.first()
+            if carwash and carwash.price:
+                total += float(carwash.price)
+            
+            # Log warning if multiple exist
+            if active_carwashes.count() > 1:
+                print(f"⚠️ Total calculation: Booking {obj.booking_id} has {active_carwashes.count()} active carwashes, only counting first one")
         
         return round(total, 2)
 
@@ -463,10 +470,18 @@ class BookingSerializer(serializers.ModelSerializer):
         return 0
 
     def get_carwash(self, obj):
-        """Get the first active carwash service for this booking, if any"""
-        carwash = obj.booking_by_user.first()
-        if carwash:
-            return CarwashNestedSerializer(carwash).data
+        """Get all active/pending carwash services for this booking (should be max 1)"""
+        # Filter for active or pending carwash services
+        carwashes = obj.booking_by_user.filter(status__in=['active', 'pending'])
+        
+        if carwashes.exists():
+            # Return the first one, but log if multiple exist (shouldn't happen after fix)
+            if carwashes.count() > 1:
+                print(f"⚠️ WARNING: Booking {obj.booking_id} has {carwashes.count()} active/pending carwash services!")
+                for cw in carwashes:
+                    print(f"   - Carwash {cw.carwash_id}: {cw.carwash_type.name} (Status: {cw.status})")
+            
+            return CarwashNestedSerializer(carwashes.first()).data
         return None
 
     def validate_slot(self, value):

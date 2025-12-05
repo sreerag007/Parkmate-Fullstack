@@ -33,17 +33,23 @@ const OwnerEmployees = () => {
             const employeesData = await parkingService.getEmployees()
             
             console.log('📊 All employees data:', employeesData)
+            console.log('📊 Is array?', Array.isArray(employeesData))
+            console.log('📊 Length:', employeesData?.length)
             
             // Get owner ID
             const ownerId = parseInt(localStorage.getItem('ownerId'))
             console.log('👤 Current owner ID:', ownerId)
             
+            // Handle both array and object with results property
+            const employeesList = Array.isArray(employeesData) ? employeesData : (employeesData?.results || [])
+            console.log('📊 Processed employees list:', employeesList)
+            
             // Filter employees assigned to this owner
-            const myEmployees = employeesData.filter(emp => emp.owner === ownerId)
+            const myEmployees = employeesList.filter(emp => emp.owner === ownerId)
             console.log('✅ My employees:', myEmployees)
             
             // Filter unassigned employees (owner is null or undefined)
-            const unassignedEmployees = employeesData.filter(emp => emp.owner === null || emp.owner === undefined)
+            const unassignedEmployees = employeesList.filter(emp => emp.owner === null || emp.owner === undefined)
             console.log('📋 Unassigned employees:', unassignedEmployees)
             
             setEmployees(myEmployees || [])

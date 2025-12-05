@@ -15,6 +15,8 @@ export default function Userprof() {
   const [profile, setProfile] = useState(null)
   const [bookings, setBookings] = useState([])
   const [carwashes, setCarwashes] = useState([])
+  const [carwashBookings, setCarwashBookings] = useState([])
+  const [bookingFilter, setBookingFilter] = useState('lot')
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
@@ -48,9 +50,13 @@ export default function Userprof() {
         const bookingsData = await parkingService.getBookings()
         setBookings(bookingsData)
 
-        // Fetch carwash services
+        // Fetch carwash services (add-on services)
         const carwashData = await parkingService.getCarwashes()
         setCarwashes(carwashData)
+
+        // Fetch standalone carwash bookings
+        const carwashBookingsData = await parkingService.getCarWashBookings()
+        setCarwashBookings(carwashBookingsData)
         
       } catch (error) {
         console.error('Error fetching user data:', error)
@@ -213,57 +219,75 @@ export default function Userprof() {
 
       {/* Bookings Section */}
       <section className="your-bookings">
-        <h3>Your Bookings</h3>
-        <div className="cards">
-          {bookings.length === 0 && <div className="empty">No bookings yet.</div>}
-          {bookings.map((booking) => (
-            <div className="card you" key={booking.booking_id}>
-              <div className="card-left">
-                <div className="lot-label">
-                  {booking.lot_read?.lot_name || 'Lot'} 
-                  <span className={`badge ${booking.status.toLowerCase()}`}>{booking.status}</span>
-                </div>
-                <div className="slot-label">
-                  Slot #{booking.slot_read?.slot_id} - {booking.slot_read?.vehicle_type}
-                </div>
-                <div className="vehicle-label">{booking.vehicle_number}</div>
-              </div>
-              <div className="card-right">
-                <div className="time">Booked: {formatDate(booking.booking_time)}</div>
-                <div className="price">₹{booking.price}</div>
-                <div className="booking-type">{booking.booking_type}</div>
-              </div>
-            </div>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3>Your Bookings</h3>
+          <select 
+            value={bookingFilter} 
+            onChange={(e) => setBookingFilter(e.target.value)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              background: 'white',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            <option value="lot">Lot Bookings</option>
+            <option value="carwash">Carwash Bookings</option>
+          </select>
         </div>
-      </section>
 
-      {/* Car Wash Services Section */}
-      {carwashes.length > 0 && (
-        <section className="services-section">
-          <h3>Your Car Wash Services</h3>
+        {bookingFilter === 'lot' ? (
           <div className="cards">
-            {carwashes.map((carwash, index) => (
-              <div className="card service" key={index}>
+            {bookings.length === 0 && <div className="empty">No lot bookings yet.</div>}
+            {bookings.map((booking) => (
+              <div className="card you" key={booking.booking_id}>
                 <div className="card-left">
-                  <div className="lot-label">Booking #{carwash.booking_read?.booking_id}</div>
-                  <div className="slot-label">
-                    {carwash.carwash_type_read?.name || 'Car Wash Service'}
+                  <div className="lot-label">
+                    {booking.lot_read?.lot_name || 'Lot'} 
+                    <span className={`badge ${booking.status.toLowerCase()}`}>{booking.status}</span>
                   </div>
+                  <div className="slot-label">
+                    Slot #{booking.slot_read?.slot_id} - {booking.slot_read?.vehicle_type}
+                  </div>
+                  <div className="vehicle-label">{booking.vehicle_number}</div>
                 </div>
                 <div className="card-right">
-                  <div className="price">₹{carwash.carwash_type_read?.price}</div>
-                  {carwash.employee_read && (
-                    <div className="employee-info">
-                      Employee: {carwash.employee_read.firstname} {carwash.employee_read.lastname}
-                    </div>
+                  <div className="time">Booked: {formatDate(booking.booking_time)}</div>
+                  <div className="price">₹{booking.price}</div>
+                  <div className="booking-type">{booking.booking_type}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="cards">
+            {carwashBookings.length === 0 && <div className="empty">No carwash bookings yet.</div>}
+            {carwashBookings.map((cwBooking) => (
+              <div className="card you" key={cwBooking.id}>
+                <div className="card-left">
+                  <div className="lot-label">
+                    {cwBooking.lot_read?.lot_name || 'Lot'}
+                    <span className={`badge ${cwBooking.status.toLowerCase()}`}>{cwBooking.status}</span>
+                  </div>
+                  <div className="slot-label">
+                    {cwBooking.carwash_service_read?.name || 'Car Wash Service'}
+                  </div>
+                  <div className="vehicle-label">{cwBooking.vehicle_number}</div>
+                </div>
+                <div className="card-right">
+                  <div className="time">Scheduled: {formatDate(cwBooking.scheduled_time)}</div>
+                  <div className="price">₹{cwBooking.carwash_service_read?.price || 0}</div>
+                  {cwBooking.payment_status && (
+                    <div className="booking-type">Payment: {cwBooking.payment_status}</div>
                   )}
                 </div>
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
     </div>
   )
 }

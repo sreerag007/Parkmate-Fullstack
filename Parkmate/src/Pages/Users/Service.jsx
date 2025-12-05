@@ -119,6 +119,12 @@ export default function Service() {
   const handlePaymentConfirm = async (paymentData) => {
     if (!selectedBooking) return
     if (!selectedService) return
+    
+    // Prevent double submission
+    if (isBookingService) {
+      console.log('⚠️ Request already in progress, ignoring duplicate click')
+      return
+    }
 
     const carwashType = carwashTypes.find(ct => ct.carwash_type_id === selectedService)
     if (!carwashType) return
@@ -165,8 +171,8 @@ export default function Service() {
       
       const errorMsg = err.response?.data?.error || err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to book car wash service'
       
-      // Check if it's a duplicate booking error
-      if (errorMsg.includes('already active')) {
+      // Check if it's a duplicate booking error (409 Conflict or error message contains "already")
+      if (err.response?.status === 409 || errorMsg.toLowerCase().includes('already')) {
         toast.warning(`⚠️ ${errorMsg}`, { autoClose: 4000 })
         // Close modal and redirect to timer
         setShowPaymentModal(false)
@@ -175,11 +181,10 @@ export default function Service() {
         }, 1500)
       } else {
         toast.error(`❌ ${errorMsg}`, { autoClose: 4000 })
-        // Keep modal open for retry
+        // Keep modal open for retry on other errors
       }
     } finally {
       setIsBookingService(false)
-      setShowPaymentModal(false)
     }
   }
 

@@ -1097,6 +1097,8 @@ class CarwashViewSet(ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def pay_for_service(self, request):
         """Create payment and car wash booking for a service"""
+        from django.db import transaction
+        
         try:
             user = request.user
             
@@ -1117,146 +1119,166 @@ class CarwashViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get the booking
-            try:
-                booking = Booking.objects.get(booking_id=booking_id, user=user_profile)
-            except Booking.DoesNotExist:
-                return Response(
-                    {'error': 'Booking not found'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Check if a car wash service is already booked for this booking
-            existing_carwash = Carwash.objects.filter(booking=booking).first()
-            if existing_carwash:
-                return Response(
-                    {'error': 'A car wash service is already active for this booking. Complete or cancel the existing service first.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Get payment data from request
-            payment_method = request.data.get('payment_method', 'UPI')
-            amount = request.data.get('amount', 0.00)
-            carwash_type_id = request.data.get('carwash_type_id')
-            
-            # Validate payment method
-            valid_methods = ['CC', 'UPI', 'Cash']
-            if payment_method not in valid_methods:
-                return Response(
-                    {'error': f'Invalid payment method. Must be one of: {valid_methods}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Validate amount
-            try:
-                amount = float(amount)
-                if amount <= 0:
+            # Use atomic transaction to prevent race conditions
+            with transaction.atomic():
+                # Get the booking with SELECT FOR UPDATE to lock the row
+                try:
+                    booking = Booking.objects.select_for_update().get(booking_id=booking_id, user=user_profile)
+                except Booking.DoesNotExist:
                     return Response(
-                        {'error': 'Amount must be greater than 0'},
+                        {'error': 'Booking not found'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                
+                # Check if a car wash service is already booked for this booking
+                # Only prevent booking if there's an ACTIVE or PENDING carwash (not completed/cancelled)
+                existing_carwash = Carwash.objects.filter(
+                    booking=booking,
+                    status__in=['active', 'pending']
+                ).first()
+                if existing_carwash:
+                    return Response(
+                        {'error': f'A car wash service ({existing_carwash.carwash_type.name}) is already active for this booking. Complete or cancel the existing service first.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-            except (ValueError, TypeError):
-                return Response(
-                    {'error': 'Invalid amount format'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Note: We allow multiple payments for one booking (slot payment + car wash payment)
-            # The duplicate check below only prevents multiple car wash services
-            
-            # Determine payment status based on method
-            payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
-            
-            # Generate transaction ID
-            import time
-            transaction_id = f'CW-{booking.booking_id}-{int(time.time())}'
-            
-            # Create payment record
-            payment = Payment.objects.create(
-                booking=booking,
-                user=user_profile,
-                payment_method=payment_method,
-                amount=amount,
-                status=payment_status,
-                transaction_id=transaction_id
-            )
-            
-            print(f"✅ Car Wash Payment created: {payment.pay_id}")
-            print(f"   - Transaction ID: {transaction_id}")
-            print(f"   - Method: {payment_method}")
-            print(f"   - Amount: ₹{amount}")
-            print(f"   - Status: {payment_status}")
-            
-            # If carwash_type_id provided, create car wash booking
-            carwash = None
-            if carwash_type_id:
+                
+                # Get payment data from request
+                payment_method = request.data.get('payment_method', 'UPI')
+                amount = request.data.get('amount', 0.00)
+                carwash_type_id = request.data.get('carwash_type_id')
+                
+                # Validate payment method
+                valid_methods = ['CC', 'UPI', 'Cash']
+                if payment_method not in valid_methods:
+                    return Response(
+                        {'error': f'Invalid payment method. Must be one of: {valid_methods}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Validate amount
                 try:
-                    carwash_type = Carwash_type.objects.get(carwash_type_id=carwash_type_id)
-                    
-                    print(f"\n{'='*60}")
-                    print(f"🔍 ADD-ON CAR WASH EMPLOYEE ASSIGNMENT")
-                    print(f"{'='*60}")
-                    print(f"   Booking ID: {booking.booking_id}")
-                    print(f"   Lot: {booking.lot.lot_name}")
-                    print(f"   Owner: {booking.lot.owner.firstname} {booking.lot.owner.lastname} ({booking.lot.owner.id})")
-                    print(f"   Service Type: {carwash_type.name}")
-                    
-                    # Smart employee assignment: Find available employee with least workload
-                    available_employees = Employee.objects.filter(
-                        owner=booking.lot.owner,
-                        availability_status='available'
-                    ).order_by('current_assignments')
-                    
-                    print(f"   Available employees: {available_employees.count()}")
-                    
-                    employee = available_employees.first()
-                    
-                    if employee:
-                        # Set carwash status based on payment status
-                        carwash_status = 'pending' if payment_status == 'PENDING' else 'active'
-                        
-                        carwash = Carwash.objects.create(
-                            booking=booking,
-                            carwash_type=carwash_type,
-                            employee=employee,
-                            price=amount,
-                            status=carwash_status
+                    amount = float(amount)
+                    if amount <= 0:
+                        return Response(
+                            {'error': 'Amount must be greater than 0'},
+                            status=status.HTTP_400_BAD_REQUEST
                         )
+                except (ValueError, TypeError):
+                    return Response(
+                        {'error': 'Invalid amount format'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Note: We allow multiple payments for one booking (slot payment + car wash payment)
+                # The duplicate check above only prevents multiple car wash services
+                
+                # Determine payment status based on method
+                payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
+                
+                # Generate transaction ID
+                import time
+                transaction_id = f'CW-{booking.booking_id}-{int(time.time())}'
+                
+                # Create payment record
+                payment = Payment.objects.create(
+                    booking=booking,
+                    user=user_profile,
+                    payment_method=payment_method,
+                    amount=amount,
+                    status=payment_status,
+                    transaction_id=transaction_id
+                )
+                
+                print(f"✅ Car Wash Payment created: {payment.pay_id}")
+                print(f"   - Transaction ID: {transaction_id}")
+                print(f"   - Method: {payment_method}")
+                print(f"   - Amount: ₹{amount}")
+                print(f"   - Status: {payment_status}")
+                
+                # If carwash_type_id provided, create car wash booking
+                carwash = None
+                if carwash_type_id:
+                    try:
+                        carwash_type = Carwash_type.objects.get(carwash_type_id=carwash_type_id)
                         
-                        # Update employee workload
-                        employee.current_assignments += 1
-                        if employee.current_assignments >= 3:  # Max 3 concurrent assignments
-                            employee.availability_status = 'busy'
-                        employee.save()
+                        print(f"\n{'='*60}")
+                        print(f"🔍 ADD-ON CAR WASH EMPLOYEE ASSIGNMENT")
+                        print(f"{'='*60}")
+                        print(f"   Booking ID: {booking.booking_id}")
+                        print(f"   Lot: {booking.lot.lot_name}")
+                        print(f"   Owner: {booking.lot.owner.firstname} {booking.lot.owner.lastname} ({booking.lot.owner.id})")
+                        print(f"   Service Type: {carwash_type.name}")
                         
-                        print(f"✅ Employee assigned: {employee.firstname} {employee.lastname}")
-                        print(f"   Employee ID: {employee.employee_id}")
-                        print(f"   Current assignments: {employee.current_assignments}")
-                        print(f"   Status: {employee.availability_status}")
-                        print(f"✅ Add-on Car Wash created: ID={carwash.carwash_id}, Status={carwash_status}")
-                        print(f"{'='*60}\n")
-                    else:
-                        print(f"⚠️ No available employees found for owner {booking.lot.owner}")
-                        print(f"   All employees are currently busy or offline")
-                        print(f"{'='*60}\n")
-                except Carwash_type.DoesNotExist:
-                    print(f"⚠️ Carwash type {carwash_type_id} not found, payment created without service booking")
-                except Exception as e:
-                    print(f"⚠️ Error creating car wash booking: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Return success response
-            return Response({
-                'message': 'Car Wash Service booked successfully ✅',
-                'payment_id': payment.pay_id,
-                'transaction_id': transaction_id,
-                'payment_method': payment_method,
-                'amount': amount,
-                'payment_status': payment_status,
-                'carwash_id': carwash.carwash_id if carwash else None,
-                'booking_id': booking_id
-            }, status=status.HTTP_201_CREATED)
+                        # Smart employee assignment: Find available employee with least workload
+                        available_employees = Employee.objects.filter(
+                            owner=booking.lot.owner,
+                            availability_status='available'
+                        ).order_by('current_assignments')
+                        
+                        print(f"   Available employees: {available_employees.count()}")
+                        
+                        employee = available_employees.first()
+                        
+                        if employee:
+                            # Set carwash status based on payment status
+                            carwash_status = 'pending' if payment_status == 'PENDING' else 'active'
+                            
+                            # Triple-check with SELECT FOR UPDATE to prevent race condition
+                            # This locks any matching carwash rows until transaction completes
+                            existing = Carwash.objects.select_for_update().filter(
+                                booking=booking,
+                                status__in=['active', 'pending']
+                            ).exists()
+                            
+                            if existing:
+                                print(f"❌ Race condition detected: Another carwash was created concurrently")
+                                return Response(
+                                    {'error': 'A car wash service is already being processed for this booking.'},
+                                    status=status.HTTP_409_CONFLICT
+                                )
+                            
+                            carwash = Carwash.objects.create(
+                                booking=booking,
+                                carwash_type=carwash_type,
+                                employee=employee,
+                                price=amount,
+                                status=carwash_status
+                            )
+                            
+                            # Update employee workload
+                            employee.current_assignments += 1
+                            if employee.current_assignments >= 3:  # Max 3 concurrent assignments
+                                employee.availability_status = 'busy'
+                            employee.save()
+                            
+                            print(f"✅ Employee assigned: {employee.firstname} {employee.lastname}")
+                            print(f"   Employee ID: {employee.employee_id}")
+                            print(f"   Current assignments: {employee.current_assignments}")
+                            print(f"   Status: {employee.availability_status}")
+                            print(f"✅ Add-on Car Wash created: ID={carwash.carwash_id}, Status={carwash_status}")
+                            print(f"{'='*60}\n")
+                        else:
+                            print(f"⚠️ No available employees found for owner {booking.lot.owner}")
+                            print(f"   All employees are currently busy or offline")
+                            print(f"{'='*60}\n")
+                    except Carwash_type.DoesNotExist:
+                        print(f"⚠️ Carwash type {carwash_type_id} not found, payment created without service booking")
+                    except Exception as e:
+                        print(f"⚠️ Error creating car wash booking: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # Return success response
+                return Response({
+                    'message': 'Car Wash Service booked successfully ✅',
+                    'payment_id': payment.pay_id,
+                    'transaction_id': transaction_id,
+                    'payment_method': payment_method,
+                    'amount': amount,
+                    'payment_status': payment_status,
+                    'carwash_id': carwash.carwash_id if carwash else None,
+                    'booking_id': booking_id
+                }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             print(f"❌ Error processing car wash payment: {str(e)}")
