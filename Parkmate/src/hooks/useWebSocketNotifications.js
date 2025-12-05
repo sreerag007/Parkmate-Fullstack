@@ -100,6 +100,9 @@ export const useWebSocketNotifications = (userId) => {
 
         socketRef.current.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
+          console.error('   WebSocket URL:', wsUrl);
+          console.error('   ReadyState:', socketRef.current?.readyState);
+          console.error('   User ID:', userId);
           setIsConnected(false);
         };
 

@@ -35,9 +35,9 @@ const DynamicLot = () => {
     const [lotInfo, setLotInfo] = useState(null);
     const [slots, setSlots] = useState([]);
     const [selected, setSelected] = useState(null);
-    const [payment, setPayment] = useState('CC');
     const [selectedVehicleType, setSelectedVehicleType] = useState('All'); // Dynamic vehicle type filter
     const [userVehicleType, setUserVehicleType] = useState(null); // User's registered vehicle type
+    const [vehicleNumber, setVehicleNumber] = useState(''); // Editable vehicle number for this booking
     const [bookingType, setBookingType] = useState('Instant');
     const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
@@ -105,13 +105,16 @@ const DynamicLot = () => {
 
                 console.log('🔍 Loading data for lot ID:', lotId);
 
-                // Fetch user profile to get vehicle type (for display only)
+                // Fetch user profile to get vehicle type and vehicle number
                 try {
                     const userProfile = await parkingService.getUserProfile();
                     console.log('🚗 User vehicle type:', userProfile.vehicle_type);
+                    console.log('🚗 User vehicle number:', userProfile.vehicle_number);
                     setUserVehicleType(userProfile.vehicle_type);
+                    // Auto-fill vehicle number from user profile
+                    setVehicleNumber(userProfile.vehicle_number || '');
                 } catch (err) {
-                    console.error('⚠️ Could not fetch user vehicle type:', err);
+                    console.error('⚠️ Could not fetch user profile:', err);
                 }
 
                 // Set default filter to 'All'
@@ -253,14 +256,11 @@ const DynamicLot = () => {
             console.log('🎯 Creating booking with payment...');
             console.log('💳 Payment data:', paymentData);
             console.log('🎯 Booking type:', bookingType);
-            
-            // Get user's vehicle number from profile
-            const userProfile = await parkingService.getUserProfile();
-            console.log('🎯 User profile:', userProfile);
+            console.log('🚗 Vehicle number for booking:', vehicleNumber);
             
             // Validate vehicle number exists
-            if (!userProfile.vehicle_number) {
-                alert('Please add a vehicle number to your profile before booking');
+            if (!vehicleNumber || !vehicleNumber.trim()) {
+                alert('Please enter a vehicle number for this booking');
                 setShowPaymentModal(false);
                 setIsBooking(false);
                 return;
@@ -269,7 +269,7 @@ const DynamicLot = () => {
             // Create booking via backend with payment info
             const bookingData = {
                 slot: slot.backendId,
-                vehicle_number: userProfile.vehicle_number,
+                vehicle_number: vehicleNumber.trim().toUpperCase(),
                 booking_type: bookingType || 'Instant',
                 payment_method: paymentData.payment_method,
                 amount: paymentData.amount
@@ -631,19 +631,25 @@ const DynamicLot = () => {
             </div>
 
             <div className="controls">
-                <div className="payment-choice">
-                    <label>Payment Method</label>
-                    <div>
-                        <label>
-                            <input type="radio" name="pay" value="CC" checked={payment === 'CC'} onChange={() => setPayment('CC')} /> Credit Card
-                        </label>
-                        <label>
-                            <input type="radio" name="pay" value="Cash" checked={payment === 'Cash'} onChange={() => setPayment('Cash')} /> Cash
-                        </label>
-                        <label>
-                            <input type="radio" name="pay" value="UPI" checked={payment === 'UPI'} onChange={() => setPayment('UPI')} /> UPI
-                        </label>
-                    </div>
+                <div className="vehicle-choice">
+                    <label>Vehicle Number</label>
+                    <input
+                        type="text"
+                        value={vehicleNumber}
+                        onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                        placeholder="e.g., KL-08-AZ-1234"
+                        required
+                        style={{
+                            padding: '0.5rem',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            fontSize: '1rem',
+                            textTransform: 'uppercase'
+                        }}
+                    />
+                    <small style={{ color: '#666', fontSize: '0.85rem' }}>
+                        Auto-filled from your profile. Change if booking for another vehicle.
+                    </small>
                 </div>
 
                 <div className="vehicle-choice">

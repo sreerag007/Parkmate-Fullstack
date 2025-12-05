@@ -103,6 +103,8 @@ export const TimeProvider = ({ children }) => {
 
         socket.onerror = (error) => {
           console.error('❌ Time sync WebSocket error:', error)
+          console.error('   WebSocket URL:', wsUrl)
+          console.error('   ReadyState:', socket.readyState)
           setIsConnected(false)
         }
 

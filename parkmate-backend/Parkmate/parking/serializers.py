@@ -379,6 +379,7 @@ class BookingSerializer(serializers.ModelSerializer):
     is_expired = serializers.SerializerMethodField()
     remaining_time = serializers.SerializerMethodField()
     carwash = serializers.SerializerMethodField()
+    has_carwash = serializers.SerializerMethodField()
     payment = serializers.SerializerMethodField()
     payments = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
@@ -404,12 +405,20 @@ class BookingSerializer(serializers.ModelSerializer):
             "is_expired",
             "remaining_time",
             "carwash",
+            "has_carwash",
             "payment",
             "payments",
             "total_amount",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "payment", "payments", "total_amount"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "has_carwash", "payment", "payments", "total_amount"]
+
+    def validate_vehicle_number(self, value):
+        """Validate vehicle number format if provided"""
+        if value:
+            # Vehicle number format validation is handled by the model's validator
+            return value.strip().upper()
+        return value
 
     def get_lot_detail(self, obj):
         """Get lot details from the slot"""
@@ -483,6 +492,16 @@ class BookingSerializer(serializers.ModelSerializer):
             
             return CarwashNestedSerializer(carwashes.first()).data
         return None
+    
+    def get_has_carwash(self, obj):
+        """
+        Boolean field to easily check if booking has an active/pending carwash.
+        Used by frontend to disable "Book Carwash" button.
+        """
+        has_carwash = obj.booking_by_user.filter(status__in=['active', 'pending']).exists()
+        # DEBUG: Log the has_carwash check
+        print(f"🔍 get_has_carwash for Booking {obj.booking_id}: {has_carwash} (Count: {obj.booking_by_user.filter(status__in=['active', 'pending']).count()})")
+        return has_carwash
 
     def validate_slot(self, value):
         if not value.is_available:
@@ -560,22 +579,49 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = ["pay_id", "user", "created_at", "payment_type"]
 
     def get_payment_type(self, obj):
-        """Determine payment type based on order (first=slot, rest=carwash)"""
+        """
+        Determine payment type by checking if it's the slot payment or a carwash payment.
+        Slot payment is the FIRST successful payment.
+        Carwash payments should have corresponding Carwash objects created around the same time.
+        """
         booking = obj.booking
-        # Get all payments for this booking ordered by creation date
-        payments = booking.payments.all().order_by('created_at')
         
-        if not payments.exists():
+        # Get all payments for this booking ordered by creation date
+        all_payments = booking.payments.all().order_by('created_at')
+        
+        if not all_payments.exists():
             return "Unknown"
         
         # Get the index of current payment
-        payment_list = list(payments)
+        payment_list = list(all_payments)
+        
         try:
             index = payment_list.index(obj)
+            
+            # First payment is the slot payment (regardless of status)
             if index == 0:
                 return "Slot Payment"
-            else:
+            
+            # For subsequent payments, check if there's a Carwash object
+            # created around the same time (within 10 seconds)
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            carwashes = Carwash.objects.filter(
+                booking=booking,
+                booked_at__gte=obj.created_at - timedelta(seconds=10),
+                booked_at__lte=obj.created_at + timedelta(seconds=10)
+            )
+            
+            if carwashes.exists():
                 return "Car Wash Payment"
+            else:
+                # Payment exists but no corresponding carwash (orphaned payment - employee unavailable)
+                return "Car Wash Payment"  # Still label it as carwash payment, just no service created
+                
+        except ValueError:
+            print(f"⚠️ get_payment_type: Payment {obj.pay_id} not found in booking payments list")
+            return "Unknown"
         except:
             return "Unknown"
 
@@ -739,11 +785,64 @@ class CarwashSerializer(serializers.ModelSerializer):
             serializer = CarwashSlotNestedSerializer(obj.booking.slot)
             return serializer.data
         return None
+    
+    def validate_booking(self, value):
+        """
+        Validate that no active or pending carwash already exists for this booking.
+        This prevents multiple add-on carwash services for the same parking slot.
+        """
+        print(f"\n🔍 CarwashSerializer.validate_booking() called for Booking {value.booking_id}")
+        
+        # Check if a carwash already exists for this booking with active/pending status
+        existing_carwash = Carwash.objects.filter(
+            booking=value,
+            status__in=['active', 'pending']
+        ).exists()
+        
+        existing_count = Carwash.objects.filter(
+            booking=value,
+            status__in=['active', 'pending']
+        ).count()
+        
+        print(f"   Existing active/pending carwash: {existing_carwash} (Count: {existing_count})")
+        
+        if existing_carwash:
+            print(f"   ❌ VALIDATION FAILED: Carwash already exists for this booking")
+            raise serializers.ValidationError(
+                "A car wash service is already booked for this parking slot. "
+                "Please complete or cancel the existing service before booking another."
+            )
+        
+        print(f"   ✅ VALIDATION PASSED: No existing carwash found\n")
+        return value
 
     def create(self, validated_data):
+        """
+        Create a new carwash with price auto-set from carwash_type.
+        Includes duplicate check as additional safeguard.
+        """
+        print(f"\n🔧 CarwashSerializer.create() called")
+        
+        # Double-check for existing carwash (defense in depth)
+        booking = validated_data.get('booking')
+        existing = Carwash.objects.filter(
+            booking=booking,
+            status__in=['active', 'pending']
+        ).exists()
+        
+        print(f"   Booking: {booking.booking_id}")
+        print(f"   Double-check - Existing carwash: {existing}")
+        
+        if existing:
+            print(f"   ❌ CREATE FAILED: Duplicate detected in create() method\n")
+            raise serializers.ValidationError({
+                'booking': 'A car wash service is already active for this booking.'
+            })
+        
         carwash_type = validated_data["carwash_type"]
         validated_data["price"] = carwash_type.price
-
+        
+        print(f"   ✅ Creating carwash for Booking {booking.booking_id}\n")
         return Carwash.objects.create(**validated_data)
 
 
@@ -809,6 +908,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "lot",
             "rating",
             "review_desc",
+            "review_type",
             "created_at",
             "updated_at",
         ]
@@ -863,6 +963,7 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
     user_detail = serializers.SerializerMethodField()
     lot_detail = serializers.SerializerMethodField()
     employee_detail = serializers.SerializerMethodField()
+    service_type_detail = serializers.SerializerMethodField()
     
     class Meta:
         model = CarWashBooking
@@ -875,6 +976,7 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
             'employee',
             'employee_detail',
             'service_type',
+            'service_type_detail',
             'price',
             'payment_method',
             'payment_status',
@@ -892,6 +994,7 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
             'user_detail',
             'lot_detail',
             'employee_detail',
+            'service_type_detail',
             'booking_time',
             'created_at',
             'updated_at',
@@ -961,6 +1064,13 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
                 'state': obj.lot.state,
             }
         return None
+    
+    def get_service_type_detail(self, obj):
+        """Return service type details with name and price"""
+        return {
+            'name': obj.service_type,
+            'price': float(obj.price) if obj.price else 0.00,
+        }
 
 
 class CarWashPaymentSerializer(serializers.ModelSerializer):

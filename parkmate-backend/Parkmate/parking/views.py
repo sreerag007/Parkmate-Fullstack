@@ -1219,33 +1219,64 @@ class CarwashViewSet(ModelViewSet):
                         
                         employee = available_employees.first()
                         
+                        # Set carwash status based on payment status
+                        # If no employee available, set to 'pending' so owner can assign later
                         if employee:
-                            # Set carwash status based on payment status
                             carwash_status = 'pending' if payment_status == 'PENDING' else 'active'
-                            
-                            # Triple-check with SELECT FOR UPDATE to prevent race condition
-                            # This locks any matching carwash rows until transaction completes
-                            existing = Carwash.objects.select_for_update().filter(
-                                booking=booking,
-                                status__in=['active', 'pending']
-                            ).exists()
-                            
-                            if existing:
-                                print(f"❌ Race condition detected: Another carwash was created concurrently")
+                        else:
+                            carwash_status = 'pending'  # Pending until owner assigns employee
+                            print(f"⚠️ No employees available - creating carwash as 'pending' for later assignment")
+                        
+                        # Final check: Query with lock to ensure no concurrent creation
+                        # Using select_for_update() locks matching rows, preventing race conditions
+                        locked_existing = Carwash.objects.select_for_update().filter(
+                            booking=booking,
+                            status__in=['active', 'pending']
+                        )
+                        
+                        if locked_existing.count() > 0:
+                            print(f"❌ Race condition detected: Another carwash was created concurrently")
+                            return Response(
+                                {'error': 'A car wash service is already being processed for this booking.'},
+                                status=status.HTTP_409_CONFLICT
+                            )
+                        
+                        # Use serializer for validation and creation (instead of direct create)
+                        from parking.serializers import CarwashSerializer
+                        carwash_data = {
+                            'booking': booking.booking_id,
+                            'carwash_type': carwash_type.carwash_type_id,
+                            'employee': employee.employee_id if employee else None,
+                            'status': carwash_status
+                        }
+                        
+                        print(f"🔍 Creating carwash via serializer with data: {carwash_data}")
+                        carwash_serializer = CarwashSerializer(data=carwash_data)
+                        
+                        if not carwash_serializer.is_valid():
+                            print(f"❌ Carwash serializer validation failed: {carwash_serializer.errors}")
+                            error_msg = carwash_serializer.errors.get('booking', ['Validation error'])[0]
+                            return Response(
+                                {'error': str(error_msg)},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        
+                        try:
+                            carwash = carwash_serializer.save()
+                        except Exception as db_error:
+                            # Catch database constraint violation (unique constraint on active/pending carwash per booking)
+                            if 'unique_active_carwash_per_booking' in str(db_error):
+                                print(f"❌ Database constraint violation: Duplicate carwash prevented by DB")
                                 return Response(
-                                    {'error': 'A car wash service is already being processed for this booking.'},
+                                    {'error': 'A car wash service is already active for this booking.'},
                                     status=status.HTTP_409_CONFLICT
                                 )
-                            
-                            carwash = Carwash.objects.create(
-                                booking=booking,
-                                carwash_type=carwash_type,
-                                employee=employee,
-                                price=amount,
-                                status=carwash_status
-                            )
-                            
-                            # Update employee workload
+                            else:
+                                # Re-raise if it's a different error
+                                raise
+                        
+                        # Update employee workload if employee was assigned
+                        if employee:
                             employee.current_assignments += 1
                             if employee.current_assignments >= 3:  # Max 3 concurrent assignments
                                 employee.availability_status = 'busy'
@@ -1255,28 +1286,47 @@ class CarwashViewSet(ModelViewSet):
                             print(f"   Employee ID: {employee.employee_id}")
                             print(f"   Current assignments: {employee.current_assignments}")
                             print(f"   Status: {employee.availability_status}")
-                            print(f"✅ Add-on Car Wash created: ID={carwash.carwash_id}, Status={carwash_status}")
-                            print(f"{'='*60}\n")
                         else:
-                            print(f"⚠️ No available employees found for owner {booking.lot.owner}")
-                            print(f"   All employees are currently busy or offline")
-                            print(f"{'='*60}\n")
+                            print(f"⚠️ No employee assigned - owner needs to assign manually")
+                        
+                        print(f"✅ Add-on Car Wash created: ID={carwash.carwash_id}, Status={carwash_status}")
+                        print(f"{'='*60}\n")
                     except Carwash_type.DoesNotExist:
-                        print(f"⚠️ Carwash type {carwash_type_id} not found, payment created without service booking")
+                        print(f"⚠️ Carwash type {carwash_type_id} not found")
+                        # Rollback payment if carwash type doesn't exist
+                        print(f"   Rolling back payment...")
+                        payment.delete()
+                        return Response(
+                            {'error': 'Invalid car wash service type.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
                     except Exception as e:
                         print(f"⚠️ Error creating car wash booking: {str(e)}")
                         import traceback
                         traceback.print_exc()
+                        # Rollback payment if unexpected error occurs
+                        print(f"   Rolling back payment...")
+                        payment.delete()
+                        return Response(
+                            {'error': f'Failed to create car wash service: {str(e)}'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
                 
-                # Return success response
+                # Return success - carwash created (with or without employee)
+                success_message = 'Car Wash Service booked successfully ✅'
+                if carwash and not carwash.employee:
+                    success_message += ' (Employee will be assigned by owner)'
+                
                 return Response({
-                    'message': 'Car Wash Service booked successfully ✅',
+                    'message': success_message,
                     'payment_id': payment.pay_id,
                     'transaction_id': transaction_id,
                     'payment_method': payment_method,
                     'amount': amount,
                     'payment_status': payment_status,
                     'carwash_id': carwash.carwash_id if carwash else None,
+                    'carwash_status': carwash.status if carwash else None,
+                    'employee_assigned': carwash.employee is not None if carwash else False,
                     'booking_id': booking_id
                 }, status=status.HTTP_201_CREATED)
             
@@ -1468,6 +1518,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
             user_role = self.request.user.role
             lot_id = self.request.query_params.get("lot_id")  # Changed from "lot" to "lot_id"
             user_id = self.request.query_params.get("user_id")  # Also changed to "user_id" for consistency
+            review_type = self.request.query_params.get("type")  # NEW: Filter by review type (SLOT or CARWASH)
             
             # Convert to integer if provided
             if lot_id:
@@ -1483,7 +1534,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
                     user_id = None
             
             print(f"DEBUG: get_queryset called for user: {self.request.user.username}, role: {user_role}")
-            print(f"DEBUG: Query params - lot_id: {lot_id} (type: {type(lot_id).__name__}), user_id: {user_id} (type: {type(user_id).__name__})")
+            print(f"DEBUG: Query params - lot_id: {lot_id} (type: {type(lot_id).__name__}), user_id: {user_id} (type: {type(user_id).__name__}), review_type: {review_type}")
             print(f"DEBUG: Total reviews in DB: {Review.objects.count()}")
             
             # For users - show all reviews, they can only edit/delete their own
@@ -1521,12 +1572,18 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 queryset = Review.objects.all()
                 print(f"DEBUG: Regular user - showing all {queryset.count()} reviews")
             
+            # Apply filters
             if lot_id:
                 queryset = queryset.filter(lot_id=lot_id)
                 print(f"DEBUG: Filtered by lot_id={lot_id}, results: {queryset.count()}")
             if user_id:
                 queryset = queryset.filter(user_id=user_id)
                 print(f"DEBUG: Filtered by user_id={user_id}, results: {queryset.count()}")
+            
+            # NEW: Filter by review type
+            if review_type and review_type.upper() in ['SLOT', 'CARWASH']:
+                queryset = queryset.filter(review_type=review_type.upper())
+                print(f"DEBUG: Filtered by review_type={review_type.upper()}, results: {queryset.count()}")
                 
             return queryset.order_by('-created_at')
         except Exception as e:
@@ -1895,17 +1952,19 @@ class CarWashBookingViewSet(ModelViewSet):
             
             # Parse scheduled_time
             from django.utils import timezone
-            from dateutil import parser as date_parser
+            from datetime import datetime
             try:
-                scheduled_dt = date_parser.parse(scheduled_time)
+                # Try parsing ISO format datetime string
+                # Frontend sends ISO 8601 format like "2025-12-06T14:30:00"
+                scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
                 # Make timezone-aware if naive
                 if timezone.is_naive(scheduled_dt):
                     scheduled_dt = timezone.make_aware(scheduled_dt)
-            except (ValueError, TypeError):
-                print(f"❌ Validation failed: Invalid scheduled_time format")
+            except (ValueError, TypeError) as e:
+                print(f"❌ Validation failed: Invalid scheduled_time format - {e}")
                 print(f"{'='*60}\n")
                 return Response(
-                    {'error': 'Invalid scheduled_time format. Use ISO 8601 format'},
+                    {'error': 'Invalid scheduled_time format. Use ISO 8601 format (e.g., 2025-12-06T14:30:00)'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -2170,7 +2229,7 @@ class CarWashBookingViewSet(ModelViewSet):
                 print(f"   New assignments: {employee.current_assignments}")
                 print(f"   New status: {employee.availability_status}\n")
     
-    @action(detail=False, methods=['GET'])
+    @action(detail=False, methods=['get'], url_path='available_time_slots', permission_classes=[permissions.AllowAny])
     def available_time_slots(self, request):
         """
         Get available time slots for a specific date and lot.
@@ -2179,84 +2238,96 @@ class CarWashBookingViewSet(ModelViewSet):
         Query Parameters:
         - date: YYYY-MM-DD format (required)
         - lot_id: P_Lot ID (optional, if not provided shows all lots)
-        
-        Response:
-        {
-            "date": "2025-12-04",
-            "slots": [
-                {
-                    "time": "09:00",
-                    "available": true,
-                    "booked_count": 0,
-                    "capacity": 2
-                },
-                ...
-            ]
-        }
         """
-        from django.utils import timezone
-        from dateutil import parser as date_parser
-        from datetime import datetime, time, timedelta
-        
-        # Get query parameters
-        date_str = request.query_params.get('date')
-        lot_id = request.query_params.get('lot_id')
-        
-        if not date_str:
-            return Response(
-                {'error': 'Date parameter is required (YYYY-MM-DD format)'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         try:
+            from django.utils import timezone
+            from datetime import datetime, time, timedelta
+            
+            # Get query parameters
+            date_str = request.query_params.get('date')
+            lot_id = request.query_params.get('lot_id')
+            
+            print(f"🔍 Fetching time slots for date={date_str}, lot_id={lot_id}")
+            
+            if not date_str:
+                return Response(
+                    {'error': 'Date parameter is required (YYYY-MM-DD format)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Parse date
-            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                print(f"✅ Parsed date: {target_date}")
+            except ValueError as e:
+                print(f"❌ Date parsing error: {e}")
+                return Response(
+                    {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Define time slots (9 AM to 8 PM, hourly)
+            time_slots = []
+            for hour in range(9, 21):  # 9 AM to 8 PM (20:00)
+                time_slots.append(time(hour, 0))
+            
+            print(f"✅ Created {len(time_slots)} time slots")
+            
+            # Build response
+            slots_data = []
+            capacity_per_slot = 2  # Max 2 cars per time slot
+            
+            for slot_time in time_slots:
+                try:
+                    # Combine date and time
+                    slot_datetime = timezone.make_aware(datetime.combine(target_date, slot_time))
+                    slot_end = slot_datetime + timedelta(hours=1)
+                    
+                    # Count bookings for this time slot
+                    query = CarWashBooking.objects.filter(
+                        scheduled_time__gte=slot_datetime,
+                        scheduled_time__lt=slot_end,
+                        status__in=['pending', 'confirmed', 'in_progress']
+                    ).exclude(status='cancelled')
+                    
+                    if lot_id:
+                        try:
+                            query = query.filter(lot_id=int(lot_id))
+                        except (ValueError, TypeError) as e:
+                            print(f"⚠️ Invalid lot_id: {lot_id}, error: {e}")
+                    
+                    booked_count = query.count()
+                    available = booked_count < capacity_per_slot
+                    
+                    slots_data.append({
+                        'time': slot_time.strftime('%H:%M'),
+                        'available': available,
+                        'booked_count': booked_count,
+                        'capacity': capacity_per_slot,
+                        'datetime': slot_datetime.isoformat()
+                    })
+                except Exception as slot_error:
+                    print(f"❌ Error processing slot {slot_time}: {slot_error}")
+                    import traceback
+                    traceback.print_exc()
+            
+            print(f"✅ Returning {len(slots_data)} time slots")
+            
+            return Response({
+                'date': date_str,
+                'lot_id': lot_id,
+                'slots': slots_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"❌ Error in available_time_slots: {str(e)}")
+            print(f"   Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
             return Response(
-                {'error': 'Invalid date format. Use YYYY-MM-DD'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': f'Failed to fetch time slots: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-        # Define time slots (9 AM to 8 PM, hourly)
-        time_slots = []
-        for hour in range(9, 21):  # 9 AM to 8 PM (20:00)
-            time_slots.append(time(hour, 0))
-        
-        # Build response
-        slots_data = []
-        capacity_per_slot = 2  # Max 2 cars per time slot
-        
-        for slot_time in time_slots:
-            # Combine date and time
-            slot_datetime = timezone.make_aware(datetime.combine(target_date, slot_time))
-            slot_end = slot_datetime + timedelta(hours=1)
-            
-            # Count bookings for this time slot
-            query = CarWashBooking.objects.filter(
-                scheduled_time__gte=slot_datetime,
-                scheduled_time__lt=slot_end,
-                status__in=['pending', 'confirmed', 'in_progress']
-            ).exclude(status='cancelled')
-            
-            if lot_id:
-                query = query.filter(lot_id=lot_id)
-            
-            booked_count = query.count()
-            available = booked_count < capacity_per_slot
-            
-            slots_data.append({
-                'time': slot_time.strftime('%H:%M'),
-                'available': available,
-                'booked_count': booked_count,
-                'capacity': capacity_per_slot,
-                'datetime': slot_datetime.isoformat()
-            })
-        
-        return Response({
-            'date': date_str,
-            'lot_id': lot_id,
-            'slots': slots_data
-        }, status=status.HTTP_200_OK)
     
     def update(self, request, *args, **kwargs):
         """
@@ -2639,6 +2710,10 @@ from rest_framework.decorators import api_view, permission_classes
 def user_booked_lots(request):
     """
     Returns all parking lots where the logged-in user has completed bookings.
+    Includes BOTH:
+    - Lots where user booked a parking slot (Booking model)
+    - Lots where user booked a standalone carwash service (CarWashBooking model)
+    
     Used to populate the "Select Parking Lot" dropdown in the Review form.
     """
     try:
@@ -2654,24 +2729,37 @@ def user_booked_lots(request):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Get all completed bookings for this user
-        completed_bookings = Booking.objects.filter(
+        # Get lots from completed SLOT bookings
+        slot_bookings = Booking.objects.filter(
             user=user_profile,
-            status__iexact='completed'  # Case-insensitive match for 'completed'
+            status__iexact='completed'
         ).select_related('lot')
         
-        # Extract unique lot IDs (SQLite compatible - no DISTINCT ON)
-        lot_ids = list(set(completed_bookings.values_list('lot_id', flat=True)))
+        slot_lot_ids = set(slot_bookings.values_list('lot_id', flat=True))
+        print(f"   Slot bookings: {slot_bookings.count()} completed bookings")
+        print(f"   Slot lots: {len(slot_lot_ids)} unique lots - {list(slot_lot_ids)}")
         
-        print(f"   Found {len(lot_ids)} lots with completed bookings")
-        print(f"   Lot IDs: {lot_ids}")
-        print(f"   Total bookings: {completed_bookings.count()}")
+        # Get lots from completed CARWASH bookings
+        carwash_bookings = CarWashBooking.objects.filter(
+            user=user_profile,
+            status='completed',
+            lot__isnull=False  # Only include carwash bookings that have a lot assigned
+        ).select_related('lot')
+        
+        carwash_lot_ids = set(carwash_bookings.values_list('lot_id', flat=True))
+        print(f"   Carwash bookings: {carwash_bookings.count()} completed bookings")
+        print(f"   Carwash lots: {len(carwash_lot_ids)} unique lots - {list(carwash_lot_ids)}")
+        
+        # Combine both sets (union) to get unique lot IDs
+        combined_lot_ids = slot_lot_ids | carwash_lot_ids
+        print(f"   ✅ Total unique reviewable lots: {len(combined_lot_ids)} - {list(combined_lot_ids)}")
         
         # Get lot details
-        lots = P_Lot.objects.filter(lot_id__in=lot_ids)
+        lots = P_Lot.objects.filter(lot_id__in=list(combined_lot_ids))
         print(f"   P_Lot query results: {lots.count()} lots")
         for lot in lots:
             print(f"     - Lot {lot.lot_id}: {lot.lot_name}")
+        
         serializer = P_LotSerializer(lots, many=True)
         
         return Response(serializer.data, status=status.HTTP_200_OK)

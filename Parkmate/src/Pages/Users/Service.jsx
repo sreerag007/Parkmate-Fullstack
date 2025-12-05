@@ -225,10 +225,19 @@ export default function Service() {
   }
 
   // Check if the SELECTED booking already has an active carwash service
-  // Use the 'carwash' field from booking serializer instead of 'booking_by_user' relationship
-  const selectedBookingHasCarwash = selectedBooking && bookings
-    .find(b => b.booking_id === selectedBooking)
-    ?.carwash !== null && bookings.find(b => b.booking_id === selectedBooking)?.carwash !== undefined
+  // Use the 'has_carwash' boolean field from booking serializer for cleaner check
+  const selectedBookingData = bookings.find(b => b.booking_id === selectedBooking)
+  const selectedBookingHasCarwash = selectedBookingData?.has_carwash || selectedBookingData?.carwash !== null
+  
+  // DEBUG: Log the selected booking data to verify has_carwash field
+  if (selectedBookingData) {
+    console.log('🔍 Selected Booking Data:', {
+      booking_id: selectedBookingData.booking_id,
+      has_carwash: selectedBookingData.has_carwash,
+      carwash: selectedBookingData.carwash,
+      selectedBookingHasCarwash: selectedBookingHasCarwash
+    })
+  }
 
   return (
     <div className="service-root container">

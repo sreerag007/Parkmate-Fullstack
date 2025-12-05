@@ -19,6 +19,7 @@
     padding: 12px 0;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
+    align-items: center;
     gap: 12px;
 }
 
@@ -28,7 +29,15 @@
 
 .info-row strong {
     min-width: 150px;
+    flex-shrink: 0;
     color: #6b7280;
+    font-weight: 600;
+}
+
+.info-row span {
+    flex: 1;
+    color: #111827;
+    word-break: break-word;
 }
 
 .edit-form {

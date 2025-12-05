@@ -120,16 +120,20 @@ export default function Userprof() {
         {!editing ? (
           <div className="profile-info">
             <div className="info-row">
-              <strong>Name:</strong> {profile?.firstname} {profile?.lastname}
+              <strong>Name:</strong>
+              <span>{profile?.firstname} {profile?.lastname}</span>
             </div>
             <div className="info-row">
-              <strong>Phone:</strong> {profile?.phone}
+              <strong>Phone:</strong>
+              <span>{profile?.phone}</span>
             </div>
             <div className="info-row">
-              <strong>Vehicle Number:</strong> {profile?.vehicle_number}
+              <strong>Vehicle Number:</strong>
+              <span>{profile?.vehicle_number}</span>
             </div>
             <div className="info-row">
-              <strong>Vehicle Type:</strong> {profile?.vehicle_type}
+              <strong>Vehicle Type:</strong>
+              <span>{profile?.vehicle_type}</span>
             </div>
           </div>
         ) : (
@@ -265,22 +269,24 @@ export default function Userprof() {
           <div className="cards">
             {carwashBookings.length === 0 && <div className="empty">No carwash bookings yet.</div>}
             {carwashBookings.map((cwBooking) => (
-              <div className="card you" key={cwBooking.id}>
+              <div className="card you" key={cwBooking.carwash_booking_id || cwBooking.id}>
                 <div className="card-left">
                   <div className="lot-label">
-                    {cwBooking.lot_read?.lot_name || 'Lot'}
+                    {cwBooking.lot_detail?.lot_name || 'Lot'}
                     <span className={`badge ${cwBooking.status.toLowerCase()}`}>{cwBooking.status}</span>
                   </div>
                   <div className="slot-label">
-                    {cwBooking.carwash_service_read?.name || 'Car Wash Service'}
+                    {cwBooking.service_type_detail?.name || cwBooking.service_type || 'Car Wash Service'}
                   </div>
-                  <div className="vehicle-label">{cwBooking.vehicle_number}</div>
+                  <div className="vehicle-label">
+                    {cwBooking.user_detail?.firstname || 'User'} - {cwBooking.payment_status || 'Pending'}
+                  </div>
                 </div>
                 <div className="card-right">
                   <div className="time">Scheduled: {formatDate(cwBooking.scheduled_time)}</div>
-                  <div className="price">₹{cwBooking.carwash_service_read?.price || 0}</div>
-                  {cwBooking.payment_status && (
-                    <div className="booking-type">Payment: {cwBooking.payment_status}</div>
+                  <div className="price">₹{cwBooking.price || cwBooking.service_type_detail?.price || 0}</div>
+                  {cwBooking.payment_method && (
+                    <div className="booking-type">Payment: {cwBooking.payment_method}</div>
                   )}
                 </div>
               </div>

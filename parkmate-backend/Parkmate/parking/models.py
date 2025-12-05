@@ -192,7 +192,7 @@ class Booking(models.Model):
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,db_column='user_id',related_name='bookings')
     slot=models.ForeignKey(to=P_Slot,on_delete=models.CASCADE,db_column='slot_id',related_name='booking_of_slot')
     lot=models.ForeignKey(to=P_Lot,on_delete=models.CASCADE,db_column='lot_id',related_name='booking_in_lot')
-    vehicle_number=models.CharField(max_length=100,validators=[vehicle_regex])
+    vehicle_number=models.CharField(max_length=100,validators=[vehicle_regex],blank=True,null=True,help_text="Vehicle number for this specific booking (can differ from user's default)")
     vehicle_type=models.CharField(max_length=50,choices=VEHICLE_CHOICES,default='Sedan',help_text="Type of vehicle used for this booking")
     booking_type=models.CharField(max_length=100,choices=BOOKING_CHOICES)
     booking_time=models.DateField(auto_now_add=True)
@@ -208,6 +208,10 @@ class Booking(models.Model):
     status=models.CharField(max_length=10,choices=STATUS_CHOICES,default="booked")
 
     def save(self, *args, **kwargs):
+        # Fallback to user's vehicle number if not provided
+        if not self.vehicle_number and self.user:
+            self.vehicle_number = self.user.vehicle_number
+        
         # Set start_time if not already set
         if not self.start_time:
             from django.utils import timezone
@@ -251,6 +255,14 @@ class Carwash(models.Model):
     
     class Meta:
         db_table='CARWASH'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['booking'],
+                condition=models.Q(status__in=['active', 'pending']),
+                name='unique_active_carwash_per_booking',
+                violation_error_message='Only one active or pending car wash service is allowed per booking.'
+            )
+        ]
 
         
 class Payment(models.Model):
@@ -299,16 +311,22 @@ class Tasks(models.Model):
         db_table='TASKS'
 
 class Review(models.Model):
+    REVIEW_TYPE_CHOICES = [
+        ('SLOT', 'Slot Booking'),
+        ('CARWASH', 'Carwash Service'),
+    ]
+    
     rev_id=models.AutoField(primary_key=True)
     lot=models.ForeignKey(to=P_Lot,on_delete=models.CASCADE,db_column='lot_id',related_name='review_of_lot')
     user=models.ForeignKey(to=UserProfile,on_delete=models.CASCADE,db_column='user_id',related_name='user')
     rating=models.IntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(5)])
     review_desc=models.TextField()
+    review_type=models.CharField(max_length=20, choices=REVIEW_TYPE_CHOICES, default='SLOT', help_text='Type of service being reviewed')
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Review {self.rating} by {self.user.firstname} for {self.lot.lot_name}"    
+        return f"Review {self.rating} by {self.user.firstname} for {self.lot.lot_name} ({self.review_type})"    
 
     class Meta:
         db_table='REVIEW'
