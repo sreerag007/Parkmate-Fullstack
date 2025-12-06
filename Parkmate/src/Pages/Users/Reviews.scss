@@ -2,6 +2,8 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
   
   h2 {
     font-size: 2rem;
@@ -1226,5 +1228,239 @@
   }
 }
 
+/* ============================================
+   OWNER REVIEWS TABLE - ISOLATED STYLES
+   ============================================ */
+
+.owner-reviews-wrapper {
+  width: 100%;
+  max-width: 100%;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: block; /* Override any flex container behavior */
+  padding: 0 1rem;
+  box-sizing: border-box;
+  
+  /* Prevent flexbox compression */
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.owner-reviews-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  
+  thead {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 2px solid #e2e8f0;
+
+    th {
+      padding: 1rem;
+      text-align: center;
+      font-weight: 600;
+      color: #334155;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-right: 1px solid #e2e8f0;
+      
+      &:last-child {
+        border-right: none;
+      }
+      
+      // Column width distribution
+      &:nth-child(1) { width: 20%; } // Customer
+      &:nth-child(2) { width: 25%; } // Parking Lot
+      &:nth-child(3) { width: 15%; } // Rating
+      &:nth-child(4) { width: 25%; } // Review
+      &:nth-child(5) { width: 15%; } // Date
+    }
+  }
+
+  tbody {
+    tr {
+      border-bottom: 1px solid #e2e8f0;
+      transition: background-color 0.3s ease;
+
+      &:hover {
+        background-color: #f8fafc;
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &.rating-5 {
+        border-left: 4px solid #22c55e;
+      }
+
+      &.rating-4 {
+        border-left: 4px solid #84cc16;
+      }
+
+      &.rating-3 {
+        border-left: 4px solid #eab308;
+      }
+
+      &.rating-2 {
+        border-left: 4px solid #f97316;
+      }
+
+      &.rating-1 {
+        border-left: 4px solid #ef4444;
+      }
+
+      td {
+        padding: 1rem;
+        text-align: center;
+        color: #475569;
+        font-size: 0.95rem;
+        border-right: 1px solid #f1f5f9;
+        vertical-align: middle;
+        
+        &:last-child {
+          border-right: none;
+        }
+
+        &.customer-name {
+          font-weight: 600;
+          color: #1e293b;
+        }
+
+        &.lot-name {
+          font-weight: 500;
+          color: #3b82f6;
+          word-wrap: break-word;
+        }
+
+        &.rating {
+          text-align: center;
+
+          .stars {
+            display: block;
+            letter-spacing: 2px;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+          }
+
+          .count {
+            display: block;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            font-weight: 500;
+          }
+        }
+
+        &.review-text {
+          button {
+            padding: 0.375rem 0.75rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            
+            &:hover {
+              background: #2563eb;
+              transform: translateY(-1px);
+              box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+            }
+            
+            &:active {
+              transform: translateY(0);
+            }
+          }
+        }
+
+        &.date {
+          color: #94a3b8;
+          font-size: 0.9rem;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}
+
+/* Responsive Design for Owner Reviews Table */
+@media (max-width: 900px) {
+  .owner-reviews-wrapper {
+    padding: 0 0.5rem;
+  }
+  
+  .owner-reviews-table {
+    thead th {
+      padding: 0.75rem 0.5rem;
+      font-size: 14px;
+    }
+    
+    tbody td {
+      padding: 8px;
+      font-size: 14px;
+      
+      &.rating {
+        .stars {
+          font-size: 0.8rem;
+          letter-spacing: 1px;
+        }
+        
+        .count {
+          font-size: 0.75rem;
+        }
+      }
+      
+      &.review-text button {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .owner-reviews-wrapper {
+    padding: 0 0.25rem;
+  }
+  
+  .owner-reviews-table {
+    thead th {
+      padding: 0.6rem 0.4rem;
+      font-size: 13px;
+    }
+    
+    tbody td {
+      padding: 0.6rem 0.4rem;
+      font-size: 13px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .owner-reviews-table {
+    thead th {
+      padding: 0.5rem 0.25rem;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+    }
+    
+    tbody td {
+      padding: 0.5rem 0.25rem;
+      font-size: 12px;
+      
+      &.customer-name,
+      &.lot-name {
+        font-size: 11px;
+      }
+    }
+  }
+}
 
 

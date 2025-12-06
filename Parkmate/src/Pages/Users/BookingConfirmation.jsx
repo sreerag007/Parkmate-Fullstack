@@ -26,24 +26,6 @@ const BookingConfirmation = () => {
   const searchParams = new URLSearchParams(location.search);
   const bookingId = searchParams.get('booking') || location.state?.bookingId;
 
-  // Load cached booking data on mount
-  useEffect(() => {
-    if (bookingId && !booking) {
-      const cached = sessionStorage.getItem(`booking_${bookingId}`);
-      if (cached) {
-        try {
-          const cachedData = JSON.parse(cached);
-          setBooking(cachedData);
-          setIsExpired(cachedData.status.toLowerCase() === 'completed');
-          setLoading(false);
-          return;
-        } catch {
-          console.log('Cache parse error, fetching fresh data');
-        }
-      }
-    }
-  }, [bookingId]);
-
   // Load booking data
   useEffect(() => {
     const loadBooking = async () => {
@@ -54,8 +36,15 @@ const BookingConfirmation = () => {
 
       try {
         setLoading(true);
-        const data = await parkingService.getBookingById(bookingId);
+        
+        // ✅ Always fetch fresh data - clear any stale cache first
+        sessionStorage.removeItem(`booking_${bookingId}`);
+        
+        // Add cache-busting timestamp to force fresh data
+        const data = await parkingService.getBookingById(bookingId, { _t: Date.now() });
         console.log('✅ Booking loaded:', data);
+        console.log('✅ Carwash in booking:', data.carwash);
+        console.log('✅ Payments:', data.payments);
         setBooking(data);
         
         // ✅ Check if expired based on end_time, not just status
@@ -73,10 +62,8 @@ const BookingConfirmation = () => {
       }
     };
 
-    // Only load if not already loaded
-    if (!booking) {
-      loadBooking();
-    }
+    // Always load fresh data
+    loadBooking();
   }, [bookingId]);
 
   // Poll backend to check booking status
@@ -491,7 +478,14 @@ const BookingConfirmation = () => {
                       <div className="carwash-detail-card">
                         <div className="detail-row">
                           <span className="label">Service:</span>
-                          <span className="value">{booking.carwash.carwash_type_detail?.name || 'Service'}</span>
+                          <span className="value">
+                            {(() => {
+                              console.log('🔍 Carwash data:', booking.carwash);
+                              console.log('🔍 Carwash type detail:', booking.carwash.carwash_type_detail);
+                              console.log('🔍 Name:', booking.carwash.carwash_type_detail?.name);
+                              return booking.carwash.carwash_type_detail?.name || 'Unknown';
+                            })()}
+                          </span>
                         </div>
                         <div className="detail-row">
                           <span className="label">Description:</span>

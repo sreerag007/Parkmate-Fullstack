@@ -692,14 +692,14 @@ class BookingSerializer(serializers.ModelSerializer):
         return 0
 
     def get_carwash(self, obj):
-        """Get all active/pending carwash services for this booking (should be max 1)"""
-        # Filter for active or pending carwash services
-        carwashes = obj.booking_by_user.filter(status__in=['active', 'pending'])
+        """Get carwash service for this booking (active, pending, or completed)"""
+        # Include completed carwashes so they show in booking confirmation after completion
+        carwashes = obj.booking_by_user.filter(status__in=['active', 'pending', 'completed'])
         
         if carwashes.exists():
-            # Return the first one, but log if multiple exist (shouldn't happen after fix)
+            # Return the first one (should be only one carwash per booking)
             if carwashes.count() > 1:
-                print(f"⚠️ WARNING: Booking {obj.booking_id} has {carwashes.count()} active/pending carwash services!")
+                print(f"⚠️ WARNING: Booking {obj.booking_id} has {carwashes.count()} carwash services!")
                 for cw in carwashes:
                     print(f"   - Carwash {cw.carwash_id}: {cw.carwash_type.name} (Status: {cw.status})")
             
@@ -796,7 +796,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         """
         Determine payment type by checking if it's the slot payment or a carwash payment.
         Slot payment is the FIRST successful payment.
-        Carwash payments should have corresponding Carwash objects created around the same time.
+        Carwash payments are any subsequent payments.
         """
         booking = obj.booking
         
@@ -816,18 +816,11 @@ class PaymentSerializer(serializers.ModelSerializer):
             if index == 0:
                 return "Slot Payment"
             
-            # For subsequent payments, check if there's a Carwash object
-            # created around the same time (within 10 seconds)
-            from django.utils import timezone
-            from datetime import timedelta
+            # For subsequent payments, they are carwash payments
+            # Check if there's actually a Carwash object for this booking
+            has_carwash = Carwash.objects.filter(booking=booking).exists()
             
-            carwashes = Carwash.objects.filter(
-                booking=booking,
-                booked_at__gte=obj.created_at - timedelta(seconds=10),
-                booked_at__lte=obj.created_at + timedelta(seconds=10)
-            )
-            
-            if carwashes.exists():
+            if has_carwash:
                 return "Car Wash Payment"
             else:
                 # Payment exists but no corresponding carwash (orphaned payment - employee unavailable)
@@ -836,7 +829,8 @@ class PaymentSerializer(serializers.ModelSerializer):
         except ValueError:
             print(f"⚠️ get_payment_type: Payment {obj.pay_id} not found in booking payments list")
             return "Unknown"
-        except:
+        except Exception as e:
+            print(f"⚠️ get_payment_type error: {e}")
             return "Unknown"
 
 
@@ -1018,6 +1012,7 @@ class CarwashSerializer(serializers.ModelSerializer):
             "carwash_type",
             "carwash_type_read",
             "price",
+            "status",
             "user_read",
             "lot_read",
             "slot_read",

@@ -51,13 +51,13 @@ const OwnerLayout = () => {
                 <div className="owner-brand">Owner Portal</div>
                 <nav className="owner-nav">
                     <Link to="/owner" className={`nav-item ${isActive('/owner')}`} onClick={handleNavClick}>
-                        <span className="icon">📊</span> Dashboard
+                        <span className="icon">📊</span> Overview
                     </Link>
                     <Link to="/owner/lots" className={`nav-item ${isActive('/owner/lots')}`} onClick={handleNavClick}>
                         <span className="icon">🅿️</span> My Lots
                     </Link>
                     <Link to="/owner/bookings" className={`nav-item ${isActive('/owner/bookings')}`} onClick={handleNavClick}>
-                        <span className="icon">📅</span> Bookings
+                        <span className="icon">📅</span> Slot Bookings
                     </Link>
                     <Link to="/owner/carwash" className={`nav-item ${isActive('/owner/carwash')}`} onClick={handleNavClick}>
                         <span className="icon">🚗</span> Car Wash
@@ -66,7 +66,7 @@ const OwnerLayout = () => {
                         <span className="icon">💳</span> Payments
                     </Link>
                     <Link to="/owner/services" className={`nav-item ${isActive('/owner/services')}`} onClick={handleNavClick}>
-                        <span className="icon">🛠️</span> Services
+                        <span className="icon">🛠️</span> Add-on Services
                     </Link>
                     <Link to="/owner/employees" className={`nav-item ${isActive('/owner/employees')}`} onClick={handleNavClick}>
                         <span className="icon">👥</span> Employees

@@ -216,12 +216,18 @@ const OwnerLots = () => {
             // Update local slot list
             setLotSlots([...lotSlots, response]);
             
+            // Update selected lot's total_slots if returned in response
+            if (response.lot_total_slots !== undefined) {
+                console.log(`📊 Updating lot total_slots: ${selectedLot.total_slots} → ${response.lot_total_slots}`);
+                setSelectedLot({
+                    ...selectedLot,
+                    total_slots: response.lot_total_slots,
+                    available_slots: response.lot_available_slots
+                });
+            }
+            
             // Refresh all lots to get updated counts
             await loadLots();
-            
-            // Also refresh the selected lot for the modal
-            const updatedLot = await parkingService.getLotById(selectedLot.lot_id);
-            setSelectedLot(updatedLot);
             
             setNewSlot({ vehicle_type: 'Sedan', price: VEHICLE_PRICES['Sedan'] });
             setShowAddSlotForm(false);
@@ -236,18 +242,24 @@ const OwnerLots = () => {
         if (window.confirm('Are you sure you want to delete this slot?')) {
             try {
                 console.log('🗑️ Deleting slot:', slotId);
-                await parkingService.deleteSlot(slotId);
-                console.log('✅ Slot deleted');
+                const response = await parkingService.deleteSlot(slotId);
+                console.log('✅ Slot deleted:', response);
 
                 // Update local slot list
                 setLotSlots(lotSlots.filter(slot => slot.slot_id !== slotId));
                 
+                // Update selected lot's total_slots if returned in response
+                if (response.lot_total_slots !== undefined) {
+                    console.log(`📊 Updating lot total_slots: ${selectedLot.total_slots} → ${response.lot_total_slots}`);
+                    setSelectedLot({
+                        ...selectedLot,
+                        total_slots: response.lot_total_slots,
+                        available_slots: response.lot_available_slots
+                    });
+                }
+                
                 // Refresh all lots to get updated counts
                 await loadLots();
-                
-                // Also refresh the selected lot for the modal
-                const updatedLot = await parkingService.getLotById(selectedLot.lot_id);
-                setSelectedLot(updatedLot);
                 
                 alert('✅ Parking slot deleted successfully!');
             } catch (err) {

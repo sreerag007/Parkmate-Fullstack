@@ -8,7 +8,7 @@ const OwnerServices = () => {
     const [carwashes, setCarwashes] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [filter, setFilter] = useState('booked') // Default to 'booked' view
+    const [filter, setFilter] = useState('all') // Changed default to 'all' to show everything
     const [selectedService, setSelectedService] = useState(null)
     const [showDetailsModal, setShowDetailsModal] = useState(false)
     const refreshIntervalRef = useRef(null)
@@ -25,8 +25,22 @@ const OwnerServices = () => {
             // Fetch carwashes for owner's lots with full details
             const data = await parkingService.getOwnerCarwashes()
             console.log('✅ Owner services loaded:', data)
+            console.log('📊 Carwashes array:', data.carwashes || data || [])
+            console.log('📊 Number of carwashes:', (data.carwashes || data || []).length)
             
-            setCarwashes(data.carwashes || data || [])
+            // Log each carwash status
+            const carwashArray = data.carwashes || data || []
+            carwashArray.forEach((c, index) => {
+                console.log(`Carwash ${index + 1}:`, {
+                    id: c.carwash_id,
+                    status: c.status,
+                    booking_status: c.booking_read?.status,
+                    user: c.user_read?.firstname,
+                    lot: c.lot_read?.lot_name
+                })
+            })
+            
+            setCarwashes(carwashArray)
         } catch (err) {
             console.error('❌ Error loading services:', err)
             console.error('❌ Error response:', err.response?.data)
@@ -80,8 +94,25 @@ const OwnerServices = () => {
     }
 
     const filteredCarwashes = carwashes.filter(c => {
+        console.log(`🔍 Filtering carwash ${c.carwash_id}:`, {
+            filter_looking_for: filter,
+            carwash_status: c.status,
+            booking_status: c.booking_read?.status,
+            will_show: filter === 'all' ? 'YES (all)' : 
+                      filter === 'booked' && (c.status?.toLowerCase() === 'active' || c.status?.toLowerCase() === 'pending') ? 'YES (booked match)' :
+                      c.status?.toLowerCase() === filter.toLowerCase() ? 'YES (exact match)' : 'NO'
+        })
+        
         if (filter === 'all') return true
-        return c.booking_read?.status?.toLowerCase() === filter.toLowerCase()
+        
+        // Filter by carwash status, not booking status
+        // Map frontend filter names to backend status values
+        if (filter === 'booked') {
+            // Show active and pending carwashes
+            return c.status?.toLowerCase() === 'active' || c.status?.toLowerCase() === 'pending'
+        }
+        
+        return c.status?.toLowerCase() === filter.toLowerCase()
     })
 
     // Sort by recent
@@ -157,10 +188,18 @@ const OwnerServices = () => {
 
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {['all', 'booked', 'completed', 'cancelled'].map(status => {
-                    // Calculate correct count for each status
-                    const count = status === 'all' 
-                        ? carwashes.length 
-                        : carwashes.filter(c => c.booking_read?.status?.toLowerCase() === status.toLowerCase()).length
+                    // Calculate correct count for each status based on carwash status
+                    let count
+                    if (status === 'all') {
+                        count = carwashes.length
+                    } else if (status === 'booked') {
+                        // Count active and pending carwashes
+                        count = carwashes.filter(c => 
+                            c.status?.toLowerCase() === 'active' || c.status?.toLowerCase() === 'pending'
+                        ).length
+                    } else {
+                        count = carwashes.filter(c => c.status?.toLowerCase() === status.toLowerCase()).length
+                    }
                     
                     return (
                         <button 

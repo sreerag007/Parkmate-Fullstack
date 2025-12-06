@@ -12,7 +12,6 @@ const OwnerReviews = () => {
   const [loading, setLoading] = useState(true)
   const [filterLot, setFilterLot] = useState('')
   const [filterRating, setFilterRating] = useState('')
-  const [filterType, setFilterType] = useState('') // NEW: Review type filter
   const [selectedReview, setSelectedReview] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -36,12 +35,6 @@ const OwnerReviews = () => {
         params.append('lot_id', filterLot)
       }
 
-      // NEW: Add review type filter
-      if (filterType) {
-        params.append('type', filterType)
-        console.log('DEBUG: Adding type filter:', filterType)
-      }
-
       if (params.toString()) {
         url += '?' + params.toString()
       }
@@ -57,7 +50,7 @@ const OwnerReviews = () => {
     } finally {
       setLoading(false)
     }
-  }, [filterLot, filterType]) // Added filterType to dependencies
+  }, [filterLot])
 
   useEffect(() => {
     if (owner) {
@@ -140,32 +133,16 @@ const OwnerReviews = () => {
             <option value="1">⭐ (1 star)</option>
           </select>
         </div>
-
-        {/* NEW: Review Type Filter */}
-        <div className="filter-group">
-          <label htmlFor="type-filter">Filter by Type</label>
-          <select
-            id="type-filter"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="form-control"
-          >
-            <option value="">All Reviews</option>
-            <option value="SLOT">🅿️ Slot Reviews</option>
-            <option value="CARWASH">🧼 Carwash Reviews</option>
-          </select>
-        </div>
       </div>
 
       {/* Reviews Table */}
       {filteredReviews.length > 0 ? (
-        <div className="table-container">
-          <table className="reviews-table">
+        <div className="owner-reviews-wrapper">
+          <table className="owner-reviews-table">
             <thead>
               <tr>
                 <th>Customer</th>
                 <th>Parking Lot</th>
-                <th>Type</th>
                 <th>Rating</th>
                 <th>Review</th>
                 <th>Date</th>
@@ -178,16 +155,11 @@ const OwnerReviews = () => {
                     {review.user_detail?.firstname} {review.user_detail?.lastname}
                   </td>
                   <td className="lot-name">{review.lot_detail?.lot_name}</td>
-                  <td className="review-type">
-                    <span className={`badge ${review.review_type === 'SLOT' ? 'badge-blue' : 'badge-green'}`}>
-                      {review.review_type === 'SLOT' ? '🅿️ Slot' : '🧼 Carwash'}
-                    </span>
-                  </td>
                   <td className="rating">
                     <span className="stars">{'⭐'.repeat(review.rating)}</span>
                     <span className="count">{review.rating}/5</span>
                   </td>
-                  <td className="review-text text-center">
+                  <td className="review-text">
                     <button
                       onClick={() => {
                         setSelectedReview(review)

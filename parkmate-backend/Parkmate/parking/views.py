@@ -596,16 +596,30 @@ class P_SlotViewSet(ModelViewSet):
         
         return super().list(request, *args, **kwargs)
     
+    def create(self, request, *args, **kwargs):
+        """Override create to update total_slots and return updated lot info"""
+        response = super().create(request, *args, **kwargs)
+        
+        # Get the created slot and update its lot's total_slots
+        slot_id = response.data.get('slot_id')
+        if slot_id:
+            slot = P_Slot.objects.get(slot_id=slot_id)
+            lot = slot.lot
+            lot.update_total_slots()
+            
+            # Add updated lot info to response
+            response.data['lot_total_slots'] = lot.total_slots
+            response.data['lot_available_slots'] = lot.available_slots()
+            print(f"✅ Slot created. Updated lot total_slots: {lot.total_slots}")
+        
+        return response
+    
     def perform_create(self, serializer):
         owner=OwnerProfile.objects.get(auth_user=self.request.user)
         lot=serializer.validated_data["lot"]
         if lot.owner !=owner:
             return Response({"error":"You cannot add slots to a lot you dont own."},status=status.HTTP_403_FORBIDDEN)
-        slot = serializer.save()
-        
-        # Update total_slots to match actual count
-        lot.update_total_slots()
-        print(f"✅ Slot added. Synced total_slots: {lot.total_slots}")
+        serializer.save()
     
     def perform_destroy(self, instance):
         lot = instance.lot
@@ -614,6 +628,21 @@ class P_SlotViewSet(ModelViewSet):
         # Update total_slots to match actual count after deletion
         lot.update_total_slots()
         print(f"✅ Slot deleted. Synced total_slots: {lot.total_slots}")
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to return updated lot info"""
+        instance = self.get_object()
+        lot = instance.lot
+        
+        # Delete the slot
+        self.perform_destroy(instance)
+        
+        # Return updated lot counts
+        return Response({
+            'message': 'Slot deleted successfully',
+            'lot_total_slots': lot.total_slots,
+            'lot_available_slots': lot.available_slots()
+        }, status=status.HTTP_200_OK)
 
     
 class BookingViewSet(ModelViewSet):
@@ -1252,6 +1281,12 @@ class CarwashViewSet(ModelViewSet):
             
             print(f"✅ Fetching carwash services for owner {owner.id} ({owner.firstname} {owner.lastname})")
             
+            # Get all lots owned by this owner
+            owner_lots = P_Lot.objects.filter(owner=owner)
+            print(f"📍 Owner has {owner_lots.count()} lots:")
+            for lot in owner_lots:
+                print(f"   - Lot {lot.lot_id}: {lot.lot_name}")
+            
             # Get all carwashes for owner's lots
             carwashes = Carwash.objects.filter(
                 booking__lot__owner=owner
@@ -1262,6 +1297,11 @@ class CarwashViewSet(ModelViewSet):
                 'carwash_type',
                 'employee'
             ).order_by('-booking__booking_time')
+            
+            print(f"🧼 Found {carwashes.count()} carwash services total")
+            print(f"🧼 Carwash details:")
+            for cw in carwashes[:10]:  # Show first 10
+                print(f"   - ID: {cw.carwash_id}, Status: {cw.status}, Booking: {cw.booking.booking_id}, Lot: {cw.booking.lot.lot_name}")
             
             # Auto-complete carwashes with expired bookings and release employees
             from django.utils import timezone
