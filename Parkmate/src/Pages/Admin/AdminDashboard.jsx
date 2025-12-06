@@ -107,36 +107,91 @@ const AdminDashboard = () => {
                 totalEmployees,
             })
 
-            // Build recent activity
+            // Build recent activity from latest events
             const activity = []
             
-            // Add recent bookings
+            // Add recent bookings (most recent first)
             if (bookingsList && bookingsList.length > 0) {
-                bookingsList.slice(0, 3).forEach(booking => {
+                const sortedBookings = [...bookingsList].sort((a, b) => 
+                    new Date(b.booking_time) - new Date(a.booking_time)
+                )
+                sortedBookings.slice(0, 3).forEach(booking => {
+                    const userName = booking.user_read 
+                        ? `${booking.user_read.firstname} ${booking.user_read.lastname}`
+                        : 'User'
                     activity.push({
                         id: `booking-${booking.booking_id}`,
                         type: 'booking',
                         text: `Booking #${booking.booking_id} - ${booking.status}`,
-                        time: new Date(booking.booking_time).toLocaleString(),
+                        time: new Date(booking.booking_time).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }),
+                        timestamp: new Date(booking.booking_time).getTime(),
                         color: 'blue'
+                    })
+                })
+            }
+
+            // Add recent carwash bookings
+            if (carwashBookingsList && carwashBookingsList.length > 0) {
+                const sortedCarwash = [...carwashBookingsList].sort((a, b) => 
+                    new Date(b.booking_time) - new Date(a.booking_time)
+                )
+                sortedCarwash.slice(0, 2).forEach(booking => {
+                    const userName = booking.user_detail 
+                        ? `${booking.user_detail.firstname} ${booking.user_detail.lastname}`
+                        : 'User'
+                    activity.push({
+                        id: `carwash-${booking.carwash_booking_id}`,
+                        type: 'carwash',
+                        text: `New Carwash Booking - ${booking.service_type}`,
+                        time: new Date(booking.booking_time).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }),
+                        timestamp: new Date(booking.booking_time).getTime(),
+                        color: 'purple'
                     })
                 })
             }
 
             // Add recent owner registrations
             if (ownersList && ownersList.length > 0) {
-                ownersList.slice(0, 2).forEach(owner => {
+                // Sort owners by created_at if available, otherwise by id (descending)
+                const sortedOwners = [...ownersList].sort((a, b) => {
+                    if (a.created_at && b.created_at) {
+                        return new Date(b.created_at) - new Date(a.created_at)
+                    }
+                    return b.id - a.id
+                })
+                sortedOwners.slice(0, 2).forEach(owner => {
+                    const timeText = owner.created_at 
+                        ? new Date(owner.created_at).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })
+                        : 'Recently'
                     activity.push({
                         id: `owner-${owner.id}`,
                         type: 'owner',
                         text: `New Owner: ${owner.firstname} ${owner.lastname}`,
-                        time: 'Recently',
+                        time: timeText,
+                        timestamp: owner.created_at ? new Date(owner.created_at).getTime() : Date.now(),
                         color: 'green'
                     })
                 })
             }
 
-            setRecentActivity(activity.slice(0, 5))
+            // Sort all activities by timestamp (most recent first) and take top 5
+            const sortedActivity = activity.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5)
+            setRecentActivity(sortedActivity)
             setError(null)
         } catch (err) {
             console.error('Error fetching dashboard data:', err)

@@ -51,7 +51,7 @@ const AdminLayout = () => {
                 <div className="page-head admin-brand">Admin Portal</div>
                 <nav className="admin-nav">
                     <Link to="/admin" className={`nav-item ${isActive('/admin')}`} onClick={handleNavClick}>
-                        <span className="icon">📊</span> Dashboard
+                        <span className="icon">📊</span> Overview
                     </Link>
                     <Link to="/admin/users" className={`nav-item ${isActive('/admin/users')}`} onClick={handleNavClick}>
                         <span className="icon">👥</span> Users
@@ -60,13 +60,13 @@ const AdminLayout = () => {
                         <span className="icon">🏢</span> Owners
                     </Link>
                     <Link to="/admin/bookings" className={`nav-item ${isActive('/admin/bookings')}`} onClick={handleNavClick}>
-                        <span className="icon">📅</span> Bookings
+                        <span className="icon">📅</span> Slot Bookings
                     </Link>
                     <Link to="/admin/carwash" className={`nav-item ${isActive('/admin/carwash')}`} onClick={handleNavClick}>
                         <span className="icon">🚿</span> Carwash Bookings
                     </Link>
                     <Link to="/admin/services" className={`nav-item ${isActive('/admin/services')}`} onClick={handleNavClick}>
-                        <span className="icon">🛠️</span> Services
+                        <span className="icon">🛠️</span> Add-on Services
                     </Link>
                     <Link to="/admin/employees" className={`nav-item ${isActive('/admin/employees')}`} onClick={handleNavClick}>
                         <span className="icon">👷</span> Employees

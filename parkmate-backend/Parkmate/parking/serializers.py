@@ -401,7 +401,8 @@ class OwnerDetailSerializer(serializers.ModelSerializer):
 
 class P_LotSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all(), required=False)
-    available_slots=serializers.SerializerMethodField()    
+    available_slots=serializers.SerializerMethodField()
+    total_slots=serializers.SerializerMethodField()    
     lot_image_url = serializers.SerializerMethodField()  # Read-only URL output
     avg_rating = serializers.SerializerMethodField()
     
@@ -425,6 +426,14 @@ class P_LotSerializer(serializers.ModelSerializer):
             "avg_rating",
             "provides_carwash",  # New field for carwash service availability
         ]
+    
+    def get_total_slots(self, obj):
+        """Return actual count of slots created for this lot"""
+        try:
+            return obj.slots.count()
+        except:
+            return 0
+    
     def get_available_slots(self, obj):
         try:
             return obj.slots.filter(is_available=True).count()
@@ -449,7 +458,7 @@ class P_LotSerializer(serializers.ModelSerializer):
         avg = qs.aggregate(Avg('rating'))['rating__avg']
         return round(avg, 1) if avg else None
 
-    read_only_fields = ["lot_id", "available_slots", "lot_image_url", "avg_rating"]
+    read_only_fields = ["lot_id", "available_slots", "total_slots", "lot_image_url", "avg_rating"]
 
 
 # P_Slot serializer

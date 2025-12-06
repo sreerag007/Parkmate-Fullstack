@@ -3,6 +3,15 @@ import { useAuth } from '../../Context/AuthContext';
 import parkingService from '../../services/parkingService';
 import './Owner.scss';
 
+// Vehicle type pricing configuration (matches backend pricing)
+const VEHICLE_PRICES = {
+    'Two-Wheeler': 10,
+    'Three-Wheeler': 20,
+    'Hatchback': 50,
+    'Sedan': 50,
+    'Multi-Axle': 80
+};
+
 const OwnerLots = () => {
     const { owner } = useAuth();
     const [lots, setLots] = useState([]);
@@ -29,33 +38,31 @@ const OwnerLots = () => {
     const [showAddSlotForm, setShowAddSlotForm] = useState(false);
     const [newSlot, setNewSlot] = useState({
         vehicle_type: 'Sedan',
-        price: ''
+        price: VEHICLE_PRICES['Sedan']
     });
 
     // Load lots from backend
     useEffect(() => {
-        const loadLots = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-
-                console.log('📋 Loading owner lots...');
-                const lotsData = await parkingService.getLots();
-                console.log('✅ Lots loaded:', lotsData);
-
-                setLots(lotsData);
-            } catch (err) {
-                console.error('❌ Error loading lots:', err);
-                setError('Failed to load your parking lots');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (owner?.role === 'Owner') {
-            loadLots();
-        }
+        loadLots();
     }, [owner]);
+
+    const loadLots = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            console.log('📋 Loading owner lots...');
+            const lotsData = await parkingService.getLots();
+            console.log('✅ Lots loaded:', lotsData);
+
+            setLots(lotsData);
+        } catch (err) {
+            console.error('❌ Error loading lots:', err);
+            setError('Failed to load your parking lots');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleAddLot = async (e) => {
         e.preventDefault();
@@ -180,6 +187,13 @@ const OwnerLots = () => {
         }
     };
 
+    const handleVehicleTypeChange = (vehicleType) => {
+        setNewSlot({
+            vehicle_type: vehicleType,
+            price: VEHICLE_PRICES[vehicleType]
+        });
+    };
+
     const handleAddSlot = async (e) => {
         e.preventDefault();
 
@@ -199,8 +213,17 @@ const OwnerLots = () => {
             const response = await parkingService.createSlot(slotData);
             console.log('✅ Slot created:', response);
 
+            // Update local slot list
             setLotSlots([...lotSlots, response]);
-            setNewSlot({ vehicle_type: 'Sedan', price: '' });
+            
+            // Refresh all lots to get updated counts
+            await loadLots();
+            
+            // Also refresh the selected lot for the modal
+            const updatedLot = await parkingService.getLotById(selectedLot.lot_id);
+            setSelectedLot(updatedLot);
+            
+            setNewSlot({ vehicle_type: 'Sedan', price: VEHICLE_PRICES['Sedan'] });
             setShowAddSlotForm(false);
             alert('✅ Parking slot created successfully!');
         } catch (err) {
@@ -216,7 +239,16 @@ const OwnerLots = () => {
                 await parkingService.deleteSlot(slotId);
                 console.log('✅ Slot deleted');
 
+                // Update local slot list
                 setLotSlots(lotSlots.filter(slot => slot.slot_id !== slotId));
+                
+                // Refresh all lots to get updated counts
+                await loadLots();
+                
+                // Also refresh the selected lot for the modal
+                const updatedLot = await parkingService.getLotById(selectedLot.lot_id);
+                setSelectedLot(updatedLot);
+                
                 alert('✅ Parking slot deleted successfully!');
             } catch (err) {
                 console.error('❌ Error deleting slot:', err);
@@ -493,9 +525,9 @@ const OwnerLots = () => {
 
             {/* Lot Details Modal */}
             {showDetailsModal && selectedLot && (
-                <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
+                <div className="modal-overlay" onClick={() => setShowDetailsModal(false)} style={{ overflow: 'hidden' }}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+                        <div className="modal-header" style={{ flexShrink: 0 }}>
                             <h2>🅿️ {selectedLot.lot_name} - Details</h2>
                             <button 
                                 className="modal-close"
@@ -505,7 +537,7 @@ const OwnerLots = () => {
                             </button>
                         </div>
 
-                        <div className="modal-body">
+                        <div className="modal-body" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                             {/* Lot Information */}
                             <div className="details-section">
                                 <h3>Lot Information</h3>
@@ -551,20 +583,20 @@ const OwnerLots = () => {
                                                     <label>Vehicle Type</label>
                                                     <select
                                                         value={newSlot.vehicle_type}
-                                                        onChange={(e) => setNewSlot({ ...newSlot, vehicle_type: e.target.value })}
+                                                        onChange={(e) => handleVehicleTypeChange(e.target.value)}
                                                     >
+                                                        <option value="Two-Wheeler">Two-Wheeler</option>
+                                                        <option value="Three-Wheeler">Three-Wheeler</option>
                                                         <option value="Hatchback">Hatchback</option>
                                                         <option value="Sedan">Sedan</option>
                                                         <option value="Multi-Axle">Multi-Axle</option>
-                                                        <option value="Three-Wheeler">Three-Wheeler</option>
-                                                        <option value="Two-Wheeler">Two-Wheeler</option>
                                                     </select>
                                                 </div>
                                                 <div className="form-group">
                                                     <label>Price (₹)</label>
                                                     <input
                                                         type="number"
-                                                        placeholder="Enter price"
+                                                        placeholder="Auto-filled based on vehicle type"
                                                         value={newSlot.price}
                                                         onChange={(e) => setNewSlot({ ...newSlot, price: e.target.value })}
                                                         step="0.01"
@@ -621,7 +653,7 @@ const OwnerLots = () => {
                             </div>
                         </div>
 
-                        <div className="modal-footer">
+                        <div className="modal-footer" style={{ flexShrink: 0 }}>
                             <button 
                                 className="btn-close"
                                 onClick={() => setShowDetailsModal(false)}

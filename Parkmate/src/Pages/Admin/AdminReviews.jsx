@@ -213,41 +213,70 @@ const AdminReviews = () => {
 
       {/* Reviews Table */}
       {displayReviews.length > 0 ? (
-        <div className="table-container">
-          <table className="reviews-table">
-            <thead>
+        <div className="overflow-x-auto shadow-md rounded-xl" style={{ marginBottom: '2rem' }}>
+          <table className="table-fixed min-w-[800px] w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+            <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
               <tr>
-                <th>Customer</th>
-                <th>Parking Lot</th>
-                <th>Rating</th>
-                <th>Review</th>
-                <th>Date</th>
+                <th className="w-1/5" style={{ padding: '1rem', textAlign: 'left', fontWeight: '600', color: '#334155', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Customer
+                </th>
+                <th className="w-1/5" style={{ padding: '1rem', textAlign: 'left', fontWeight: '600', color: '#334155', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Parking Lot
+                </th>
+                <th className="w-1/5" style={{ padding: '1rem', textAlign: 'center', fontWeight: '600', color: '#334155', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Rating
+                </th>
+                <th className="w-1/5" style={{ padding: '1rem', textAlign: 'center', fontWeight: '600', color: '#334155', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Review
+                </th>
+                <th className="w-1/5" style={{ padding: '1rem', textAlign: 'center', fontWeight: '600', color: '#334155', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Date
+                </th>
               </tr>
             </thead>
             <tbody>
               {displayReviews.map((review) => (
-                <tr key={review.rev_id} className={`rating-${review.rating}`}>
-                  <td className="customer-name">
+                <tr 
+                  key={review.rev_id} 
+                  className={`rating-${review.rating}`}
+                  style={{ borderBottom: '1px solid #e2e8f0', transition: 'background-color 0.3s ease' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <td style={{ padding: '1rem', fontWeight: '500', color: '#1e293b', fontSize: '0.95rem' }}>
                     {review.user_detail?.firstname} {review.user_detail?.lastname}
                   </td>
-                  <td className="lot-name">{review.lot_detail?.lot_name}</td>
-                  <td className="rating">
-                    <span className="stars">{'⭐'.repeat(review.rating)}</span>
-                    <span className="count">{review.rating}/5</span>
+                  <td style={{ padding: '1rem', fontWeight: '500', color: '#3b82f6', fontSize: '0.95rem' }}>
+                    {review.lot_detail?.lot_name}
                   </td>
-                  <td className="review-text text-center">
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ letterSpacing: '2px', fontSize: '0.9rem' }}>
+                        {'⭐'.repeat(review.rating)}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '500' }}>
+                        {review.rating}/5
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
                     <button
                       onClick={() => {
                         setSelectedReview(review)
                         setIsModalOpen(true)
                       }}
-                      className="text-blue-600 hover:underline font-medium text-sm"
+                      className="text-blue-600 hover:text-blue-700 hover:underline transition-colors font-medium text-sm"
+                      style={{ cursor: 'pointer', background: 'none', border: 'none' }}
                     >
                       Show
                     </button>
                   </td>
-                  <td className="date">
-                    {new Date(review.created_at).toLocaleDateString()}
+                  <td style={{ padding: '1rem', color: '#94a3b8', fontSize: '0.9rem', textAlign: 'center' }}>
+                    {new Date(review.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
                   </td>
                 </tr>
               ))}

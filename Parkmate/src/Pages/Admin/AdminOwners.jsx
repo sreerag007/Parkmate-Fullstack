@@ -25,7 +25,22 @@ const AdminOwners = () => {
         try {
             setLoading(true)
             const data = await parkingService.getOwnerProfiles()
-            setOwners(data || [])
+            
+            // Enrich owner data with carwash information from their lots
+            const enrichedOwners = await Promise.all(data.map(async (owner) => {
+                try {
+                    const lotsData = await parkingService.getOwnerLots(owner.id)
+                    const lots = lotsData.lots || []
+                    // Check if any lot provides carwash
+                    const providesCarwash = lots.some(lot => lot.provides_carwash === true)
+                    return { ...owner, provides_carwash: providesCarwash }
+                } catch (err) {
+                    console.error(`Error fetching lots for owner ${owner.id}:`, err)
+                    return { ...owner, provides_carwash: false }
+                }
+            }))
+            
+            setOwners(enrichedOwners || [])
             setError(null)
         } catch (err) {
             console.error('Error fetching owners:', err)
@@ -308,7 +323,7 @@ const AdminOwners = () => {
                                                     <div className="detail-item">
                                                         <span className="detail-label">Provides Carwash Service</span>
                                                         <span className="detail-value">
-                                                            {ownerDetails.provides_carwash ? '✅ Yes' : '❌ No'}
+                                                            {ownerLots.some(lot => lot.provides_carwash === true) ? '✅ Yes' : '❌ No'}
                                                         </span>
                                                     </div>
                                                 </div>
