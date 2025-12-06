@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import parkingService from '../../services/parkingService'
+import api from '../../services/api'
 import ServerClock from '../../components/ServerClock'
 import './Admin.scss'
 
@@ -10,6 +11,7 @@ const AdminDashboard = () => {
         totalUsers: 0,
         totalOwners: 0,
         totalBookings: 0,
+        totalCarwashBookings: 0,
         totalRevenue: 0,
         pendingOwners: 0,
         totalEmployees: 0,
@@ -28,7 +30,7 @@ const AdminDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true)
-            const [users, owners, bookings, allPayments, employees] = await Promise.all([
+            const [users, owners, bookings, carwashBookings, allPayments, employees] = await Promise.all([
                 parkingService.getUsers().catch(err => {
                     console.error('Error fetching users:', err)
                     return []
@@ -39,6 +41,10 @@ const AdminDashboard = () => {
                 }),
                 parkingService.getBookings().catch(err => {
                     console.error('Error fetching bookings:', err)
+                    return []
+                }),
+                api.get('/carwash-bookings/').then(res => res.data).catch(err => {
+                    console.error('Error fetching carwash bookings:', err)
                     return []
                 }),
                 // Fetch all payments to calculate platform revenue accurately
@@ -56,6 +62,7 @@ const AdminDashboard = () => {
             const usersList = Array.isArray(users) ? users : (users?.results || [])
             const ownersList = Array.isArray(owners) ? owners : (owners?.results || [])
             const bookingsList = Array.isArray(bookings) ? bookings : (bookings?.results || [])
+            const carwashBookingsList = Array.isArray(carwashBookings) ? carwashBookings : (carwashBookings?.results || [])
             const paymentsList = Array.isArray(allPayments) ? allPayments : (allPayments?.results || [])
             const employeesList = Array.isArray(employees) ? employees : (employees?.results || [])
 
@@ -63,6 +70,7 @@ const AdminDashboard = () => {
                 users: usersList.length,
                 owners: ownersList.length,
                 bookings: bookingsList.length,
+                carwashBookings: carwashBookingsList.length,
                 payments: paymentsList.length,
                 employees: employeesList.length,
             })
@@ -73,6 +81,7 @@ const AdminDashboard = () => {
             const totalUsers = usersList?.length || 0
             const totalOwners = ownersList?.length || 0
             const totalBookings = bookingsList?.length || 0
+            const totalCarwashBookings = carwashBookingsList?.length || 0
             // Only count SUCCESS payments for revenue (exclude PENDING and FAILED)
             const successfulPayments = (paymentsList || []).filter(p => p.status === 'SUCCESS')
             const totalPayments = successfulPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
@@ -92,6 +101,7 @@ const AdminDashboard = () => {
                 totalUsers,
                 totalOwners,
                 totalBookings,
+                totalCarwashBookings,
                 totalRevenue: platformRevenue,
                 pendingOwners,
                 totalEmployees,
@@ -206,6 +216,13 @@ const AdminDashboard = () => {
                     <h3>Total Employees</h3>
                     <div className="value">{stats.totalEmployees}</div>
                     <div className="sub-text">Registered employees</div>
+                </div>
+
+                <div className="bento-card carwash" onClick={() => navigate('/admin/carwash')} style={{ cursor: 'pointer' }}>
+                    <div className="card-icon">🚿</div>
+                    <h3>Carwash Bookings</h3>
+                    <div className="value">{stats.totalCarwashBookings}</div>
+                    <div className="sub-text">Standalone carwash services</div>
                 </div>
 
                 <div className="bento-card quick-actions">

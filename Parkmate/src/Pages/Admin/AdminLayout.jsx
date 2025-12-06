@@ -62,6 +62,9 @@ const AdminLayout = () => {
                     <Link to="/admin/bookings" className={`nav-item ${isActive('/admin/bookings')}`} onClick={handleNavClick}>
                         <span className="icon">📅</span> Bookings
                     </Link>
+                    <Link to="/admin/carwash" className={`nav-item ${isActive('/admin/carwash')}`} onClick={handleNavClick}>
+                        <span className="icon">🚿</span> Carwash Bookings
+                    </Link>
                     <Link to="/admin/services" className={`nav-item ${isActive('/admin/services')}`} onClick={handleNavClick}>
                         <span className="icon">🛠️</span> Services
                     </Link>

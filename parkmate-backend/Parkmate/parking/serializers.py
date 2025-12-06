@@ -175,6 +175,118 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class UserDetailSerializer(serializers.ModelSerializer):
+    """
+    Detailed serializer for admin user management.
+    Includes comprehensive stats about bookings, payments, and reviews.
+    """
+    auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+    username = serializers.CharField(source='auth_user.username', read_only=True)
+    email = serializers.EmailField(source='auth_user.email', read_only=True)
+    is_active = serializers.BooleanField(source='auth_user.is_active', read_only=True)
+    date_joined = serializers.DateTimeField(source='auth_user.date_joined', read_only=True)
+    
+    # Booking statistics
+    total_slot_bookings = serializers.SerializerMethodField()
+    total_carwash_bookings = serializers.SerializerMethodField()
+    last_booking_date = serializers.SerializerMethodField()
+    
+    # Payment statistics
+    total_transactions = serializers.SerializerMethodField()
+    total_amount_spent = serializers.SerializerMethodField()
+    last_payment_date = serializers.SerializerMethodField()
+    
+    # Review statistics
+    total_reviews = serializers.SerializerMethodField()
+    average_rating_given = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            "id",
+            "auth_user",
+            "username",
+            "email",
+            "is_active",
+            "date_joined",
+            "firstname",
+            "lastname",
+            "phone",
+            "vehicle_number",
+            "vehicle_type",
+            "driving_license",
+            "created_at",
+            "updated_at",
+            "total_slot_bookings",
+            "total_carwash_bookings",
+            "last_booking_date",
+            "total_transactions",
+            "total_amount_spent",
+            "last_payment_date",
+            "total_reviews",
+            "average_rating_given",
+        ]
+        read_only_fields = ["id", "auth_user", "username", "email", "is_active", "date_joined", "created_at", "updated_at"]
+    
+    def get_total_slot_bookings(self, obj):
+        """Count total slot bookings"""
+        from parking.models import Booking
+        return Booking.objects.filter(user=obj).count()
+    
+    def get_total_carwash_bookings(self, obj):
+        """Count total carwash bookings (both add-on and standalone)"""
+        from parking.models import Carwash, CarWashBooking
+        addon_count = Carwash.objects.filter(booking__user=obj).count()
+        standalone_count = CarWashBooking.objects.filter(user=obj).count()
+        return addon_count + standalone_count
+    
+    def get_last_booking_date(self, obj):
+        """Get the most recent booking date"""
+        from parking.models import Booking, CarWashBooking
+        from django.db.models import Max
+        
+        slot_booking = Booking.objects.filter(user=obj).aggregate(Max('booking_time'))['booking_time__max']
+        carwash_booking = CarWashBooking.objects.filter(user=obj).aggregate(Max('booking_time'))['booking_time__max']
+        
+        # Return the most recent of the two
+        if slot_booking and carwash_booking:
+            return max(slot_booking, carwash_booking)
+        return slot_booking or carwash_booking
+    
+    def get_total_transactions(self, obj):
+        """Count total payment transactions"""
+        from parking.models import Payment
+        return Payment.objects.filter(user=obj).count()
+    
+    def get_total_amount_spent(self, obj):
+        """Calculate total amount spent across all payments"""
+        from parking.models import Payment
+        from django.db.models import Sum
+        
+        total = Payment.objects.filter(user=obj, status='SUCCESS').aggregate(Sum('amount'))['amount__sum']
+        return float(total) if total else 0.00
+    
+    def get_last_payment_date(self, obj):
+        """Get the most recent payment date"""
+        from parking.models import Payment
+        
+        last_payment = Payment.objects.filter(user=obj).order_by('-created_at').first()
+        return last_payment.created_at if last_payment else None
+    
+    def get_total_reviews(self, obj):
+        """Count total reviews submitted"""
+        from parking.models import Review
+        return Review.objects.filter(user=obj).count()
+    
+    def get_average_rating_given(self, obj):
+        """Calculate average rating given by user"""
+        from parking.models import Review
+        from django.db.models import Avg
+        
+        avg_rating = Review.objects.filter(user=obj).aggregate(Avg('rating'))['rating__avg']
+        return round(float(avg_rating), 2) if avg_rating else 0.00
+
+
 class OwnerProfileSerializer(serializers.ModelSerializer):
     auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
     username = serializers.CharField(source='auth_user.username', read_only=True)
@@ -195,6 +307,7 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
             "pincode",
             "verification_status",
             "verification_document_image",
+            "provides_carwash",
             "created_at",
             "updated_at",
         ]
@@ -205,6 +318,85 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class OwnerDetailSerializer(serializers.ModelSerializer):
+    """
+    Detailed serializer for admin owner management.
+    Includes comprehensive stats about lots and services.
+    """
+    auth_user = serializers.PrimaryKeyRelatedField(read_only=True)
+    username = serializers.CharField(source='auth_user.username', read_only=True)
+    verification_document_image = serializers.SerializerMethodField()
+    
+    # Statistics
+    total_lots = serializers.SerializerMethodField()
+    total_available_slots = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = OwnerProfile
+        fields = [
+            "id",
+            "auth_user",
+            "username",
+            "firstname",
+            "lastname",
+            "phone",
+            "streetname",
+            "locality",
+            "city",
+            "state",
+            "pincode",
+            "verification_status",
+            "verification_document_image",
+            "provides_carwash",
+            "created_at",
+            "updated_at",
+            "total_lots",
+            "total_available_slots",
+        ]
+        read_only_fields = [
+            "id",
+            "auth_user",
+            "username",
+            "created_at",
+            "updated_at",
+        ]
+    
+    def get_verification_document_image(self, obj):
+        """Get URL for verification document image"""
+        if obj.verification_document_image:
+            # Return just the URL path (e.g., /media/verification_documents/file.jpg)
+            return obj.verification_document_image.url
+        return None
+    
+    def get_total_lots(self, obj):
+        """Count total lots owned"""
+        from parking.models import P_Lot
+        return P_Lot.objects.filter(owner=obj).count()
+    
+    def get_total_available_slots(self, obj):
+        """Calculate total available slots across all lots"""
+        from parking.models import P_Lot, Booking
+        from django.db.models import Sum, Count, Q
+        from django.utils import timezone
+        
+        lots = P_Lot.objects.filter(owner=obj)
+        total_available = 0
+        
+        for lot in lots:
+            # Count booked slots (not expired and not cancelled)
+            booked_count = Booking.objects.filter(
+                lot=lot,
+                status__in=['BOOKED', 'EXTENDED']
+            ).filter(
+                Q(end_time__gte=timezone.now()) | Q(end_time__isnull=True)
+            ).count()
+            
+            available = lot.total_slots - booked_count
+            total_available += max(0, available)
+        
+        return total_available
 
 
 class P_LotSerializer(serializers.ModelSerializer):
@@ -692,6 +884,51 @@ class EmployeeSerializer(serializers.ModelSerializer):
             }
         return None
 
+class EmployeeListSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer for admin employee monitoring.
+    Includes computed status and owner details.
+    """
+    name = serializers.SerializerMethodField()
+    assigned_owner = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Employee
+        fields = [
+            'employee_id',
+            'name',
+            'phone',
+            'driving_license',
+            'location',
+            'assigned_owner',
+            'status',
+            'availability_status',
+            'current_assignments',
+        ]
+        read_only_fields = fields
+    
+    def get_name(self, obj):
+        """Return full name"""
+        return f"{obj.firstname} {obj.lastname}"
+    
+    def get_assigned_owner(self, obj):
+        """Return owner name if assigned"""
+        if obj.owner:
+            return f"{obj.owner.firstname} {obj.owner.lastname}"
+        return None
+    
+    def get_location(self, obj):
+        """Return formatted location or 'Not set'"""
+        if obj.latitude and obj.longitude:
+            return f"{obj.latitude}, {obj.longitude}"
+        return "Not set"
+    
+    def get_status(self, obj):
+        """Return 'Assigned' or 'Unassigned' based on owner"""
+        return "Assigned" if obj.owner else "Unassigned"
+
 # Carwash serializer
 class CarwashBookingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -1057,11 +1294,31 @@ class CarWashBookingSerializer(serializers.ModelSerializer):
     def get_lot_detail(self, obj):
         """Return nested lot details"""
         if obj.lot:
+            # Build full address
+            address_parts = []
+            if obj.lot.streetname:
+                address_parts.append(obj.lot.streetname)
+            if obj.lot.locality:
+                address_parts.append(obj.lot.locality)
+            if obj.lot.city:
+                address_parts.append(obj.lot.city)
+            if obj.lot.state:
+                address_parts.append(obj.lot.state)
+            if obj.lot.pincode:
+                address_parts.append(obj.lot.pincode)
+            
+            full_address = ", ".join(address_parts) if address_parts else "N/A"
+            
             return {
                 'lot_id': obj.lot.lot_id,
                 'lot_name': obj.lot.lot_name,
+                'streetname': obj.lot.streetname or '',
+                'locality': obj.lot.locality or '',
                 'city': obj.lot.city,
                 'state': obj.lot.state,
+                'pincode': obj.lot.pincode or '',
+                'address': full_address,  # Complete formatted address
+                'provides_carwash': obj.lot.provides_carwash,
             }
         return None
     

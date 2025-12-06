@@ -29,6 +29,7 @@ import AdminDashboard from './Pages/Admin/AdminDashboard'
 import AdminUsers from './Pages/Admin/AdminUsers'
 import AdminOwners from './Pages/Admin/AdminOwners'
 import AdminBookings from './Pages/Admin/AdminBookings'
+import AdminCarwashBookings from './Pages/Admin/AdminCarwashBookings'
 import AdminServices from './Pages/Admin/AdminServices'
 import AdminEmployees from './Pages/Admin/AdminEmployees'
 import AdminReviews from './Pages/Admin/AdminReviews'
@@ -115,6 +116,7 @@ function AppWithWebSocket() {
                     <Route path="users" element={<AdminUsers />} />
                     <Route path="owners" element={<AdminOwners />} />
                     <Route path="bookings" element={<AdminBookings />} />
+                    <Route path="carwash" element={<AdminCarwashBookings />} />
                     <Route path="services" element={<AdminServices />} />
                     <Route path="employees" element={<AdminEmployees />} />
                     <Route path="reviews" element={<AdminReviews />} />

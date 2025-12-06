@@ -91,6 +91,7 @@ class OwnerProfile(models.Model):
     verification_status=models.CharField(max_length=20,choices=VERIFATION_STATUS_CHOICE,default=STATUS_PENDING,help_text="Admin approval status for owner")
     verification_document_image=models.ImageField(upload_to='verification_documents/',null=True,
                                                   blank=True,help_text="Scanned copy of verification document")
+    provides_carwash=models.BooleanField(default=False,help_text="True if owner provides car wash services at any lot")
     # Saves to MEDIA_ROOT/verification_documents/
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)

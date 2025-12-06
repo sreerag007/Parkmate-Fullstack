@@ -183,7 +183,7 @@ class UserProfileViewSet(ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def destroy(self, request, *args, **kwargs):
-        """Delete a user profile - admin only"""
+        """Delete a user profile and auth_user permanently - admin only"""
         user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
         
         if not (request.user.is_superuser or user_role == 'admin'):
@@ -195,16 +195,77 @@ class UserProfileViewSet(ModelViewSet):
         profile = self.get_object()
         auth_user = profile.auth_user
         
-        # Delete the profile first
+        # Count related records that will be deleted
+        from parking.models import Booking, CarWashBooking, Payment, Review
+        slot_bookings = Booking.objects.filter(user=profile).count()
+        carwash_bookings = CarWashBooking.objects.filter(user=profile).count()
+        payments = Payment.objects.filter(user=profile).count()
+        reviews = Review.objects.filter(user=profile).count()
+        
+        # Delete the profile (will cascade delete related records due to ForeignKey constraints)
         profile.delete()
         
-        # Then delete the auth user if desired (optional - you might want to keep it for history)
-        # Uncomment if you want to delete the auth user too:
-        # auth_user.delete()
+        # Delete the auth user
+        auth_user.delete()
         
         return Response(
-            {'detail': 'User profile deleted successfully.'},
-            status=status.HTTP_204_NO_CONTENT
+            {
+                'detail': 'User deleted successfully.',
+                'cascade_deleted': {
+                    'slot_bookings': slot_bookings,
+                    'carwash_bookings': carwash_bookings,
+                    'payments': payments,
+                    'reviews': reviews
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def user_details(self, request, pk=None):
+        """Get comprehensive user details with statistics - admin only"""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can view user details.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from parking.serializers import UserDetailSerializer
+        
+        profile = self.get_object()
+        serializer = UserDetailSerializer(profile)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def toggle_status(self, request, pk=None):
+        """Toggle user active status (enable/disable) - admin only"""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can toggle user status.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        profile = self.get_object()
+        auth_user = profile.auth_user
+        
+        # Toggle the is_active status
+        auth_user.is_active = not auth_user.is_active
+        auth_user.save()
+        
+        status_text = "enabled" if auth_user.is_active else "disabled"
+        
+        return Response(
+            {
+                'detail': f'User {status_text} successfully.',
+                'user_id': profile.id,
+                'username': auth_user.username,
+                'is_active': auth_user.is_active
+            },
+            status=status.HTTP_200_OK
         )
     
 class OwnerProfileViewSet(ModelViewSet):
@@ -285,7 +346,82 @@ class OwnerProfileViewSet(ModelViewSet):
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )    
+            )
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def owner_details(self, request, pk=None):
+        """Get comprehensive owner details with statistics - admin only"""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can view owner details.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from parking.serializers import OwnerDetailSerializer
+        
+        owner = self.get_object()
+        serializer = OwnerDetailSerializer(owner, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def approve(self, request, pk=None):
+        """Approve owner - admin only. Prevents reapproval of declined owners."""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can approve owners.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        owner = self.get_object()
+        
+        # Prevent reapproval of declined owners
+        if owner.verification_status == OwnerProfile.STATUS_DECLINED:
+            return Response(
+                {'error': 'Declined owners cannot be reapproved.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        owner.verification_status = OwnerProfile.STATUS_APPROVED
+        owner.save()
+        
+        return Response(
+            {
+                'detail': 'Owner approved successfully.',
+                'owner_id': owner.id,
+                'owner_name': f'{owner.firstname} {owner.lastname}',
+                'verification_status': owner.verification_status
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def decline(self, request, pk=None):
+        """Decline owner - admin only. Once declined, cannot be reapproved."""
+        user_role = getattr(request.user, 'role', '').lower() if getattr(request.user, 'role', '') else ''
+        
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'Only admins can decline owners.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        owner = self.get_object()
+        owner.verification_status = OwnerProfile.STATUS_DECLINED
+        owner.save()
+        
+        return Response(
+            {
+                'detail': 'Owner declined successfully. This action cannot be reversed.',
+                'owner_id': owner.id,
+                'owner_name': f'{owner.firstname} {owner.lastname}',
+                'verification_status': owner.verification_status
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 #P_LotViewsets
@@ -1474,7 +1610,76 @@ class EmployeeViewSet(ModelViewSet):
         
         # Default: create unassigned employee
         else:
-            serializer.save(owner=None)    
+            serializer.save(owner=None)
+    
+    @action(detail=False, methods=['get'], url_path='admin-list', permission_classes=[IsAuthenticated])
+    def admin_list(self, request):
+        """
+        Read-only endpoint for admin to monitor all employees.
+        Returns employee list with assignment status and owner details.
+        Supports search and filtering.
+        """
+        from parking.serializers import EmployeeListSerializer
+        from django.db.models import Q
+        
+        # Check admin permissions
+        user_role = getattr(request.user, 'role', '').lower()
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'error': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        print(f"\n📊 Admin Employees List Request")
+        print(f"   User: {request.user.username}")
+        
+        # Get all employees
+        queryset = Employee.objects.all().select_related('owner')
+        
+        # Search filter
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(firstname__icontains=search) |
+                Q(lastname__icontains=search) |
+                Q(phone__icontains=search) |
+                Q(driving_license__icontains=search) |
+                Q(owner__firstname__icontains=search) |
+                Q(owner__lastname__icontains=search)
+            )
+            print(f"   Search: '{search}'")
+        
+        # Status filter
+        status_filter = request.query_params.get('status', 'all').lower()
+        if status_filter == 'assigned':
+            queryset = queryset.filter(owner__isnull=False)
+            print(f"   Filter: Assigned only")
+        elif status_filter == 'unassigned':
+            queryset = queryset.filter(owner__isnull=True)
+            print(f"   Filter: Unassigned only")
+        
+        # Order by name
+        queryset = queryset.order_by('firstname', 'lastname')
+        
+        # Get counts
+        total_count = Employee.objects.count()
+        assigned_count = Employee.objects.filter(owner__isnull=False).count()
+        unassigned_count = Employee.objects.filter(owner__isnull=True).count()
+        
+        print(f"   Total: {total_count} | Assigned: {assigned_count} | Unassigned: {unassigned_count}")
+        print(f"   Returning: {queryset.count()} employees\n")
+        
+        # Serialize
+        serializer = EmployeeListSerializer(queryset, many=True)
+        
+        return Response({
+            'employees': serializer.data,
+            'stats': {
+                'total': total_count,
+                'assigned': assigned_count,
+                'unassigned': unassigned_count,
+            }
+        }, status=status.HTTP_200_OK)
                 
 
 
@@ -1913,12 +2118,33 @@ class CarWashBookingViewSet(ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """Users only see their own car wash bookings"""
+        """
+        Users see their own car wash bookings.
+        Admins see all car wash bookings.
+        """
         user = self.request.user
+        user_role = getattr(user, 'role', '').lower() if getattr(user, 'role', '') else ''
+        
+        print(f"\n🔍 CarWashBookingViewSet.get_queryset()")
+        print(f"   User: {user.username}")
+        print(f"   User Role: '{user_role}'")
+        print(f"   Is Superuser: {user.is_superuser}")
+        print(f"   Total CarWash Bookings in DB: {CarWashBooking.objects.count()}")
+        
+        # Admins can see all bookings
+        if user.is_superuser or user_role == 'admin':
+            queryset = CarWashBooking.objects.all().order_by('-booking_time')
+            print(f"   ✅ Admin access granted - returning {queryset.count()} bookings")
+            return queryset
+        
+        # Regular users only see their own bookings
         try:
             user_profile = UserProfile.objects.get(auth_user=user)
-            return CarWashBooking.objects.filter(user=user_profile).order_by('-booking_time')
+            queryset = CarWashBooking.objects.filter(user=user_profile).order_by('-booking_time')
+            print(f"   👤 User access - returning {queryset.count()} bookings for {user_profile.firstname}")
+            return queryset
         except UserProfile.DoesNotExist:
+            print(f"   ❌ UserProfile not found - returning empty queryset")
             return CarWashBooking.objects.none()
     
     def create(self, request, *args, **kwargs):
@@ -2203,6 +2429,44 @@ class CarWashBookingViewSet(ModelViewSet):
             completion_thread.start()
             print(f"⏰ Scheduled auto-completion for booking {booking.carwash_booking_id} in 5 minutes")
     
+    def update(self, request, *args, **kwargs):
+        """
+        Update a car wash booking (admin can update status, regular users limited).
+        Handles partial updates (PATCH) and full updates (PUT).
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        print(f"\n{'='*60}")
+        print(f"📝 Updating car wash booking {instance.carwash_booking_id}")
+        print(f"   User: {request.user.username}")
+        print(f"   Method: {'PATCH (partial)' if partial else 'PUT (full)'}")
+        print(f"   Current status: {instance.status}")
+        print(f"   Request data: {request.data}")
+        
+        # For partial updates, only validate fields being updated
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            print(f"✅ Car wash booking {instance.carwash_booking_id} updated successfully")
+            print(f"   New status: {serializer.instance.status}")
+            print(f"{'='*60}\n")
+            
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"❌ Update failed: {str(e)}")
+            print(f"   Validation errors: {getattr(serializer, 'errors', 'N/A')}")
+            print(f"{'='*60}\n")
+            raise
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Handle PATCH requests"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
     def perform_update(self, serializer):
         """Handle employee workload when booking status changes"""
         booking = self.get_object()
@@ -2346,18 +2610,47 @@ class CarWashBookingViewSet(ModelViewSet):
         print(f"🔄 Updating car wash booking {booking.carwash_booking_id}")
         print(f"   Current status: {booking.status}")
         print(f"   New status: {new_status}")
+        print(f"   User: {request.user.username}")
+        print(f"   User role: {getattr(request.user, 'role', 'N/A')}")
+        
+        # Check if user is admin
+        user_role = getattr(request.user, 'role', '').lower() if hasattr(request.user, 'role') and request.user.role else ''
+        is_admin = request.user.is_superuser or user_role == 'admin'
+        
+        print(f"   Is Admin: {is_admin} (superuser={request.user.is_superuser}, role='{user_role}')")
         
         if new_status and new_status != booking.status:
-            # Validate status transition
+            # Validate status transition (admins can bypass some restrictions)
             valid_transitions = {
                 'pending': ['confirmed', 'cancelled'],
                 'confirmed': ['in_progress', 'cancelled'],
                 'in_progress': ['completed', 'cancelled'],
                 'completed': [],  # No transitions from completed
-                'cancelled': [],  # No transitions from cancelled
+                'cancelled': [],  # No transitions from cancelled (unless admin)
             }
             
             allowed_next_states = valid_transitions.get(booking.status, [])
+            
+            # Admins can reactivate cancelled bookings
+            if is_admin and booking.status == 'cancelled':
+                allowed_next_states = ['pending', 'confirmed', 'in_progress', 'completed']
+                print(f"   ✅ Admin override: allowing reactivation from cancelled")
+            
+            # Admins can also move completed bookings back (for corrections)
+            elif is_admin and booking.status == 'completed':
+                allowed_next_states = ['in_progress', 'cancelled']
+                print(f"   ✅ Admin override: allowing status change from completed")
+            
+            # Admins can skip in_progress and go directly to completed
+            elif is_admin and booking.status in ['pending', 'confirmed'] and new_status == 'completed':
+                allowed_next_states = list(allowed_next_states) + ['completed']
+                print(f"   ✅ Admin override: allowing direct completion from {booking.status}")
+            
+            # Admins can go back to any previous state
+            elif is_admin and booking.status == 'in_progress' and new_status in ['pending', 'confirmed']:
+                allowed_next_states = list(allowed_next_states) + ['pending', 'confirmed']
+                print(f"   ✅ Admin override: allowing rollback to {new_status}")
+            
             if new_status not in allowed_next_states:
                 print(f"❌ Invalid status transition: {booking.status} → {new_status}")
                 print(f"   Allowed transitions: {allowed_next_states}")
@@ -2370,8 +2663,8 @@ class CarWashBookingViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Additional validation for specific transitions
-            if new_status == 'completed' and booking.payment_status != 'verified':
+            # Additional validation for specific transitions (can be bypassed by admin)
+            if new_status == 'completed' and booking.payment_status != 'verified' and not is_admin:
                 print(f"❌ Cannot complete booking: payment not verified")
                 print(f"{'='*60}\n")
                 return Response(
@@ -2379,22 +2672,25 @@ class CarWashBookingViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if new_status == 'in_progress':
-                # Set started time
-                from django.utils import timezone
-                request.data._mutable = True
-                request.data['started_time'] = timezone.now().isoformat()
+            # Prepare data for update (handle both QueryDict and regular dict)
+            from django.utils import timezone
+            update_data = dict(request.data)
             
-            if new_status == 'completed':
-                # Set completed time
-                from django.utils import timezone
-                request.data._mutable = True
-                request.data['completed_time'] = timezone.now().isoformat()
+            if new_status == 'in_progress' and 'started_time' not in update_data:
+                update_data['started_time'] = timezone.now().isoformat()
+            
+            if new_status == 'completed' and 'completed_time' not in update_data:
+                update_data['completed_time'] = timezone.now().isoformat()
             
             print(f"✅ Valid transition allowed")
+            
+            # Use update_data instead of request.data
+            serializer = self.get_serializer(booking, data=update_data, partial=True)
+        else:
+            # No status change, use original request data
+            serializer = self.get_serializer(booking, data=request.data, partial=True)
         
         # Perform the update
-        serializer = self.get_serializer(booking, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         
