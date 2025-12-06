@@ -306,7 +306,6 @@ const OwnerCarWash = () => {
                 <th>Scheduled Date</th>
                 <th>Price</th>
                 <th>Payment Method</th>
-                <th>Transaction ID</th>
                 <th>Status</th>
                 <th>Payment</th>
                 <th>Actions</th>
@@ -353,17 +352,6 @@ const OwnerCarWash = () => {
                     <span className={`payment-method-badge ${booking.payment_method.toLowerCase()}`}>
                       {booking.payment_method}
                     </span>
-                  </td>
-                  <td>
-                    {booking.transaction_id ? (
-                      <code className="transaction-id" title={booking.transaction_id}>
-                        {booking.transaction_id.length > 15 
-                          ? `${booking.transaction_id.substring(0, 12)}...` 
-                          : booking.transaction_id}
-                      </code>
-                    ) : (
-                      <span className="no-transaction">-</span>
-                    )}
                   </td>
                   <td>
                     <span className={`status-badge ${getStatusBadgeClass(booking.status)}`}>

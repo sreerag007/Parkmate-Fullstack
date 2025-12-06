@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { UserCheck, UserX, Search, Info, Users } from 'lucide-react'
+import { UserCheck, UserX, Search, Users } from 'lucide-react'
 import api from '../../services/api'
 import './Admin.scss'
 
@@ -93,12 +93,6 @@ const AdminEmployees = () => {
                         <Users size={28} />
                         <h1>Employees</h1>
                     </div>
-                </div>
-
-                {/* Informational Banner */}
-                <div className="info-banner">
-                    <Info size={18} />
-                    <span>Employee assignment is now managed by owners. This is a read-only monitoring view.</span>
                 </div>
 
                 {/* Statistics Cards */}

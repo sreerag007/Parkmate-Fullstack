@@ -495,7 +495,7 @@ const OwnerBookings = () => {
                     </div>
                 ) : (
                     <div style={{
-                        overflowX: 'auto',
+                        overflowX: 'visible',
                         borderRadius: '12px',
                         border: '1px solid #e2e8f0',
                         background: '#fff'
@@ -506,21 +506,21 @@ const OwnerBookings = () => {
                         }}>
                             <thead>
                                 <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f8fafc' }}>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>User</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Lot</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Slot</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Vehicle</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Booking Date</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Price</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Method</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Status</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', fontWeight: '600', color: '#0f172a' }}>Actions</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>User</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Lot</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Slot</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Vehicle</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Date</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Price</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Method</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Status</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: '600', color: '#0f172a', fontSize: '0.85rem' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {sortedBookings.map((b) => (
                                     <tr key={b.booking_id} style={{ borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.background = '#fff'}>
-                                        <td style={{ padding: '16px' }}>
+                                        <td style={{ padding: '8px 12px' }}>
                                             <div style={{ fontWeight: '600', color: '#0f172a' }}>
                                                 {b.user_read?.firstname && b.user_read?.lastname 
                                                     ? `${b.user_read.firstname} ${b.user_read.lastname}` 
@@ -528,19 +528,19 @@ const OwnerBookings = () => {
                                             </div>
                                             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ID: {b.user}</div>
                                         </td>
-                                        <td style={{ padding: '16px', color: '#0f172a' }}>
+                                        <td style={{ padding: '8px 12px', color: '#0f172a' }}>
                                             {b.lot_detail?.lot_name || 'Unknown Lot'}
                                         </td>
-                                        <td style={{ padding: '16px', color: '#0f172a' }}>
+                                        <td style={{ padding: '8px 12px', color: '#0f172a' }}>
                                             #{b.slot_read?.slot_id || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '16px', color: '#0f172a', textTransform: 'capitalize' }}>
+                                        <td style={{ padding: '8px 12px', color: '#0f172a', textTransform: 'capitalize' }}>
                                             {b.vehicle_number || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '16px', color: '#64748b' }}>
+                                        <td style={{ padding: '8px 12px', color: '#64748b' }}>
                                             {new Date(b.booking_time).toLocaleDateString()}
                                         </td>
-                                        <td style={{ padding: '16px', color: '#0f172a', fontWeight: '700' }}>
+                                        <td style={{ padding: '8px 12px', color: '#0f172a', fontWeight: '700' }}>
                                             ₹{parseFloat(b.price || 0).toFixed(2)}
                                             {b.payments?.[0]?.is_renewal && (
                                                 <span style={{
@@ -556,7 +556,7 @@ const OwnerBookings = () => {
                                                 </span>
                                             )}
                                         </td>
-                                        <td style={{ padding: '16px' }}>
+                                        <td style={{ padding: '8px 12px' }}>
                                             <span style={{
                                                 padding: '4px 10px',
                                                 borderRadius: '6px',
@@ -568,7 +568,7 @@ const OwnerBookings = () => {
                                                 {b.payments?.[0]?.payment_method || b.payment_method || 'N/A'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '16px' }}>
+                                        <td style={{ padding: '8px 12px' }}>
                                             <span style={{
                                                 padding: '6px 12px',
                                                 borderRadius: '8px',
@@ -580,7 +580,7 @@ const OwnerBookings = () => {
                                                 {b.status?.toUpperCase()}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                                 {b.status?.toLowerCase() === 'booked' && (
                                                     <button 

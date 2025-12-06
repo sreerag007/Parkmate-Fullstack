@@ -1745,25 +1745,28 @@
 .bookings-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: auto;
 }
 
 .bookings-table th,
 .bookings-table td {
-    padding: 16px 24px;
+    padding: 8px 12px;
     text-align: left;
     border-bottom: 1px solid #f1f5f9;
+    font-size: 0.85rem;
+    vertical-align: top;
 }
 
 .bookings-table th {
     background: #f8fafc;
     color: #64748b;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .bookings-table td {
     color: #334155;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
 }
 
 .status-badge {
