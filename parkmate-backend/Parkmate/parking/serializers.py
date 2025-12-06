@@ -402,7 +402,6 @@ class OwnerDetailSerializer(serializers.ModelSerializer):
 class P_LotSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=OwnerProfile.objects.all(), required=False)
     available_slots=serializers.SerializerMethodField()
-    total_slots=serializers.SerializerMethodField()    
     lot_image_url = serializers.SerializerMethodField()  # Read-only URL output
     avg_rating = serializers.SerializerMethodField()
     
@@ -426,13 +425,6 @@ class P_LotSerializer(serializers.ModelSerializer):
             "avg_rating",
             "provides_carwash",  # New field for carwash service availability
         ]
-    
-    def get_total_slots(self, obj):
-        """Return actual count of slots created for this lot"""
-        try:
-            return obj.slots.count()
-        except:
-            return 0
     
     def get_available_slots(self, obj):
         try:
@@ -458,7 +450,7 @@ class P_LotSerializer(serializers.ModelSerializer):
         avg = qs.aggregate(Avg('rating'))['rating__avg']
         return round(avg, 1) if avg else None
 
-    read_only_fields = ["lot_id", "available_slots", "total_slots", "lot_image_url", "avg_rating"]
+    read_only_fields = ["lot_id", "available_slots", "lot_image_url", "avg_rating"]
 
 
 # P_Slot serializer
@@ -525,7 +517,7 @@ class UserProfileNestedSerializer(serializers.ModelSerializer):
 class PLotNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = P_Lot
-        fields = ["lot_id", "lot_name", "latitude", "longitude"]
+        fields = ["lot_id", "lot_name", "latitude", "longitude", "provides_carwash"]
 
 class PSlotNestedSerializer(serializers.ModelSerializer):
     lot_detail = PLotNestedSerializer(source="lot", read_only=True)
@@ -615,10 +607,30 @@ class BookingSerializer(serializers.ModelSerializer):
     read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "has_carwash", "payment", "payments", "total_amount"]
 
     def validate_vehicle_number(self, value):
-        """Validate vehicle number format if provided"""
+        """Validate vehicle number format and check for duplicate active bookings"""
         if value:
             # Vehicle number format validation is handled by the model's validator
-            return value.strip().upper()
+            normalized_value = value.strip().upper()
+            
+            # Get the current user from context
+            request = self.context.get('request')
+            if request and request.user.is_authenticated:
+                # Check if user already has an active booking with this vehicle number
+                # Only check if this is a CREATE operation (not UPDATE)
+                if not self.instance:  # instance is None during creation
+                    existing_booking = Booking.objects.filter(
+                        user__auth_user=request.user,
+                        vehicle_number=normalized_value,
+                        status__in=['booked', 'BOOKED', 'active', 'ACTIVE', 'scheduled', 'SCHEDULED']
+                    ).exists()
+                    
+                    if existing_booking:
+                        raise serializers.ValidationError(
+                            f"You already have an active booking for vehicle {normalized_value}. "
+                            "Please use a different vehicle number or wait for the current booking to complete."
+                        )
+            
+            return normalized_value
         return value
 
     def get_lot_detail(self, obj):
@@ -776,6 +788,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "transaction_id",
             "created_at",
             "payment_type",
+            "is_renewal",
         ]
         read_only_fields = ["pay_id", "user", "created_at", "payment_type"]
 

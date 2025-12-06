@@ -124,7 +124,14 @@ class P_Lot(models.Model):
     def available_slots(self):
         # Check if any slots are available (status=True)
         return self.slots.filter(is_available=True).count()
-        
+    
+    def update_total_slots(self):
+        """Update total_slots to match actual slot count"""
+        actual_count = self.slots.count()
+        if self.total_slots != actual_count:
+            self.total_slots = actual_count
+            # Use update to avoid triggering save signal recursion
+            P_Lot.objects.filter(lot_id=self.lot_id).update(total_slots=actual_count)
         
         
     def __str__(self):
@@ -246,7 +253,7 @@ class Carwash(models.Model):
     carwash_id=models.AutoField(primary_key=True)
     booking=models.ForeignKey(to=Booking,on_delete=models.CASCADE,db_column='booking_id',related_name='booking_by_user')
     #service_id=models.ForeignKey(to=Services,on_delete=models.CASCADE,db_column='service_id',related_name='carwashes')
-    employee=models.ForeignKey(to=Employee,on_delete=models.CASCADE,db_column='emp_id',related_name='carwashes')
+    employee=models.ForeignKey(to=Employee,on_delete=models.CASCADE,db_column='emp_id',related_name='carwashes',null=True,blank=True)
     carwash_type=models.ForeignKey(to=Carwash_type,on_delete=models.CASCADE,db_column='carwash_type',related_name='carwashes')
     price=models.DecimalField(max_digits=5,decimal_places=2,default=0.00)
     status=models.CharField(max_length=20,choices=STATUS_CHOICES,default='active')
@@ -287,6 +294,7 @@ class Payment(models.Model):
     status=models.CharField(max_length=10,choices=PAYMENT_STATUS_CHOICES,default='SUCCESS')
     service_type=models.CharField(max_length=20,choices=SERVICE_TYPE_CHOICES,default='slot_booking',help_text="Type of service being paid for")
     transaction_id=models.CharField(max_length=100,blank=True,null=True)
+    is_renewal=models.BooleanField(default=False,help_text="True if this is a renewal payment (50% discount applied)")
     created_at=models.DateTimeField(auto_now_add=True, null=True)
     verified_by=models.ForeignKey(to=AuthUser,on_delete=models.SET_NULL,null=True,blank=True,related_name='payments_verified')
     verified_at=models.DateTimeField(null=True,blank=True)

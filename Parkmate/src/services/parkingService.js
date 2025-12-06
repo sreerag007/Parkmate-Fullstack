@@ -111,6 +111,11 @@ const parkingService = {
     return response.data;
   },
 
+  checkVehicleAvailability: async (vehicle_number) => {
+    const response = await api.post('/bookings/check_vehicle_availability/', { vehicle_number });
+    return response.data;
+  },
+
   updateBooking: async (id, bookingData) => {
     const response = await api.patch(`/bookings/${id}/`, bookingData);
     return response.data;

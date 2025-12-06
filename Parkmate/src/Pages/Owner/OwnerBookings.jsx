@@ -511,6 +511,7 @@ const OwnerBookings = () => {
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Slot</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Vehicle</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Booking Date</th>
+                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Price</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Method</th>
                                     <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#0f172a' }}>Status</th>
                                     <th style={{ padding: '16px', textAlign: 'center', fontWeight: '600', color: '#0f172a' }}>Actions</th>
@@ -538,6 +539,22 @@ const OwnerBookings = () => {
                                         </td>
                                         <td style={{ padding: '16px', color: '#64748b' }}>
                                             {new Date(b.booking_time).toLocaleDateString()}
+                                        </td>
+                                        <td style={{ padding: '16px', color: '#0f172a', fontWeight: '700' }}>
+                                            ₹{parseFloat(b.price || 0).toFixed(2)}
+                                            {b.payments?.[0]?.is_renewal && (
+                                                <span style={{
+                                                    marginLeft: '8px',
+                                                    padding: '2px 8px',
+                                                    backgroundColor: '#10b981',
+                                                    color: 'white',
+                                                    fontSize: '11px',
+                                                    fontWeight: '600',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    Renewal
+                                                </span>
+                                            )}
                                         </td>
                                         <td style={{ padding: '16px' }}>
                                             <span style={{

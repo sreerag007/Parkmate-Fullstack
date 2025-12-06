@@ -52,18 +52,21 @@ const CarWash = () => {
     fetchServices()
   }, [])
 
-  // Fetch user's lots for optional selection (only carwash-enabled lots)
+  // Fetch user's lots for optional selection (only standalone carwash lots)
   useEffect(() => {
     const fetchLots = async () => {
       try {
         const response = await parkingService.getLots()
         if (response) {
-          // Filter to show only lots that provide carwash service
-          const carwashLots = response.filter(lot => lot.provides_carwash === true)
+          // Filter to show only lots that provide carwash service (provides_carwash=true)
+          // This includes both standalone carwash lots AND parking lots with add-on carwash
+          const carwashLots = response.filter(lot => 
+            lot.provides_carwash === true
+          )
           setLots(carwashLots)
           
           if (carwashLots.length === 0) {
-            console.log('ℹ️ No parking lots with carwash service available')
+            console.log('ℹ️ No carwash lots available')
           }
         }
       } catch (error) {

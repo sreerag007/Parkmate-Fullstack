@@ -417,13 +417,14 @@ const OwnerLots = () => {
                                     checked={newLot.provides_carwash}
                                     onChange={(e) => setNewLot({ ...newLot, provides_carwash: e.target.checked })}
                                     style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                    title="Enable this if your parking lot also offers car wash services (add-on or stand-alone)"
                                 />
                                 <span style={{ fontSize: '16px', fontWeight: '500' }}>
                                     🚗 This parking lot provides car wash services
                                 </span>
                             </label>
                             <p style={{ fontSize: '13px', color: '#666', marginTop: '5px', marginLeft: '30px' }}>
-                                Enable this if your parking lot offers car wash services to customers
+                                Check this box if your lot offers car wash services (add-on for parking customers or standalone)
                             </p>
                         </div>
                         <div className="form-actions">

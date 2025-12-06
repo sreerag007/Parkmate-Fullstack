@@ -38,6 +38,7 @@ const DynamicLot = () => {
     const [selectedVehicleType, setSelectedVehicleType] = useState('All'); // Dynamic vehicle type filter
     const [userVehicleType, setUserVehicleType] = useState(null); // User's registered vehicle type
     const [vehicleNumber, setVehicleNumber] = useState(''); // Editable vehicle number for this booking
+    const [vehicleValidation, setVehicleValidation] = useState({ checking: false, available: true, message: '' });
     const [bookingType, setBookingType] = useState('Instant');
     const [advanceStartTime, setAdvanceStartTime] = useState('');
     const [loading, setLoading] = useState(true);
@@ -49,6 +50,53 @@ const DynamicLot = () => {
     const [isBooking, setIsBooking] = useState(false);
     const timeoutsRef = useRef({});
     const refreshIntervalRef = useRef(null);
+    const vehicleCheckTimeoutRef = useRef(null);
+
+    // Function to check vehicle availability
+    const checkVehicleAvailability = async (vehicle_number) => {
+        if (!vehicle_number || vehicle_number.length < 3) {
+            setVehicleValidation({ checking: false, available: true, message: '' });
+            return;
+        }
+
+        try {
+            setVehicleValidation({ checking: true, available: true, message: 'Checking...' });
+            
+            const response = await parkingService.checkVehicleAvailability(vehicle_number.trim().toUpperCase());
+            
+            if (response.available) {
+                setVehicleValidation({ 
+                    checking: false, 
+                    available: true, 
+                    message: '' 
+                });
+            } else {
+                setVehicleValidation({ 
+                    checking: false, 
+                    available: false, 
+                    message: response.message || 'Vehicle already has an active booking'
+                });
+            }
+        } catch (err) {
+            console.error('Error checking vehicle availability:', err);
+            setVehicleValidation({ checking: false, available: true, message: '' });
+        }
+    };
+
+    // Debounced vehicle check
+    const handleVehicleNumberChange = (value) => {
+        setVehicleNumber(value);
+        
+        // Clear previous timeout
+        if (vehicleCheckTimeoutRef.current) {
+            clearTimeout(vehicleCheckTimeoutRef.current);
+        }
+        
+        // Set new timeout for validation check (500ms delay)
+        vehicleCheckTimeoutRef.current = setTimeout(() => {
+            checkVehicleAvailability(value);
+        }, 500);
+    };
 
     // Function to refresh slots from backend with optional filters
     const refreshSlots = async (vehicleTypeFilter = selectedVehicleType) => {
@@ -636,18 +684,34 @@ const DynamicLot = () => {
                     <input
                         type="text"
                         value={vehicleNumber}
-                        onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                        onChange={(e) => handleVehicleNumberChange(e.target.value.toUpperCase())}
                         placeholder="e.g., KL-08-AZ-1234"
                         required
                         style={{
                             padding: '0.5rem',
-                            border: '1px solid #ccc',
+                            border: vehicleValidation.available ? '1px solid #ccc' : '2px solid #f59e0b',
                             borderRadius: '4px',
                             fontSize: '1rem',
-                            textTransform: 'uppercase'
+                            textTransform: 'uppercase',
+                            backgroundColor: vehicleValidation.available ? 'white' : '#fffbeb'
                         }}
                     />
-                    <small style={{ color: '#666', fontSize: '0.85rem' }}>
+                    {vehicleValidation.checking && (
+                        <small style={{ color: '#3b82f6', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>
+                            ⏳ Checking availability...
+                        </small>
+                    )}
+                    {!vehicleValidation.checking && !vehicleValidation.available && (
+                        <small style={{ color: '#f59e0b', fontSize: '0.85rem', display: 'block', marginTop: '4px', fontWeight: '600' }}>
+                            ⚠️ {vehicleValidation.message}
+                        </small>
+                    )}
+                    {!vehicleValidation.checking && vehicleValidation.available && vehicleNumber && (
+                        <small style={{ color: '#10b981', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>
+                            ✓ Vehicle available for booking
+                        </small>
+                    )}
+                    <small style={{ color: '#666', fontSize: '0.85rem', display: 'block', marginTop: '4px' }}>
                         Auto-filled from your profile. Change if booking for another vehicle.
                     </small>
                 </div>
@@ -674,7 +738,19 @@ const DynamicLot = () => {
                 )}
 
                 <div className="actions">
-                    <button className="btn primary" onClick={bookSlot} disabled={!selected}>Book Selected Slot</button>
+                    <button 
+                        className="btn primary" 
+                        onClick={bookSlot} 
+                        disabled={!selected || !vehicleValidation.available || vehicleValidation.checking}
+                        title={
+                            !selected ? 'Please select a slot' :
+                            vehicleValidation.checking ? 'Checking vehicle availability...' :
+                            !vehicleValidation.available ? 'This vehicle already has an active booking' :
+                            'Proceed to book this slot'
+                        }
+                    >
+                        Book Selected Slot
+                    </button>
                     <Link to="/profile" className="btn ghost" style={{ marginLeft: 8 }}>My Profile</Link>
                 </div>
 

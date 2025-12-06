@@ -186,6 +186,13 @@ const BookingConfirmation = () => {
     setShowRenewalPaymentModal(true);
   };
 
+  // Calculate renewal price (50% of original slot price)
+  const getRenewalPrice = () => {
+    if (!booking || !booking.slot_read) return 0;
+    const originalPrice = parseFloat(booking.slot_read.price || booking.price || 0);
+    return (originalPrice / 2).toFixed(2);
+  };
+
   const handleRenewalPaymentConfirm = async (paymentData) => {
     if (!bookingId) return;
 
@@ -514,12 +521,26 @@ const BookingConfirmation = () => {
 
             {/* Action Buttons */}
             <div className="action-buttons">
-              <button
-                className="btn secondary"
-                onClick={() => navigate('/service', { state: { bookingId: booking.booking_id } })}
-              >
-                🚗 Add Car Wash Service
-              </button>
+              {booking.lot_detail?.provides_carwash ? (
+                <button
+                  className="btn secondary"
+                  onClick={() => navigate('/service', { state: { bookingId: booking.booking_id } })}
+                >
+                  🚗 Add Car Wash Service
+                </button>
+              ) : (
+                <div className="no-carwash-banner" style={{
+                  padding: '12px 20px',
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  color: '#6b7280',
+                  fontSize: '0.95rem',
+                  fontWeight: '500'
+                }}>
+                  🚫 No add-on car wash services available for this lot.
+                </div>
+              )}
               {isExpiringSoon && (
                 <div className="expiring-warning">
                   <p style={{ color: '#f59e0b', fontWeight: '500', margin: 0 }}>
@@ -634,7 +655,8 @@ const BookingConfirmation = () => {
             lot_detail: booking.lot_detail,
             vehicle_type: booking.vehicle_type 
           }}
-          price={booking.price}
+          price={getRenewalPrice()}
+          isRenewal={true}
           onConfirm={handleRenewalPaymentConfirm}
           onClose={handleRenewalPaymentCancel}
           isLoading={isRenewing}

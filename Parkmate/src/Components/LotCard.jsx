@@ -70,6 +70,17 @@ const LotCard = ({ lot }) => {
           <div className="lot-card__slots">
             {lot.available_slots} / {lot.total_slots} slots available
           </div>
+          <div className="lot-card__services" style={{
+            fontSize: '0.85rem',
+            color: '#059669',
+            marginTop: '6px',
+            fontWeight: '500'
+          }}>
+            {lot.provides_carwash 
+              ? '🚗 Parking, 🧽 Add-on Car Wash'
+              : '🚗 Parking Only'
+            }
+          </div>
         </div>
 
         <button

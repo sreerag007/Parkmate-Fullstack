@@ -569,6 +569,19 @@ const OwnerPayments = () => {
                                     </td>
                                     <td style={{ ...fontStyles.bodyMD, padding: '16px', color: '#0f172a', fontWeight: '700' }}>
                                         ₹{parseFloat(payment.amount).toFixed(2)}
+                                        {payment.is_renewal && (
+                                            <span style={{
+                                                marginLeft: '8px',
+                                                padding: '2px 8px',
+                                                backgroundColor: '#10b981',
+                                                color: 'white',
+                                                fontSize: '11px',
+                                                fontWeight: '600',
+                                                borderRadius: '4px'
+                                            }}>
+                                                Renewal
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ padding: '16px' }}>
                                         <span style={{

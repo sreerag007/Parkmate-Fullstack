@@ -488,6 +488,10 @@ class P_LotVIewSet(ModelViewSet):
                 is_available=True
             )
         print(f"✅ Created {total_slots} parking slots for lot: {lot.lot_name}")
+        
+        # Update total_slots to match actual count
+        lot.update_total_slots()
+        print(f"✅ Synced total_slots: {lot.total_slots}")
 
 
 #P_SlotViewsets
@@ -597,7 +601,19 @@ class P_SlotViewSet(ModelViewSet):
         lot=serializer.validated_data["lot"]
         if lot.owner !=owner:
             return Response({"error":"You cannot add slots to a lot you dont own."},status=status.HTTP_403_FORBIDDEN)
-        serializer.save()
+        slot = serializer.save()
+        
+        # Update total_slots to match actual count
+        lot.update_total_slots()
+        print(f"✅ Slot added. Synced total_slots: {lot.total_slots}")
+    
+    def perform_destroy(self, instance):
+        lot = instance.lot
+        instance.delete()
+        
+        # Update total_slots to match actual count after deletion
+        lot.update_total_slots()
+        print(f"✅ Slot deleted. Synced total_slots: {lot.total_slots}")
 
     
 class BookingViewSet(ModelViewSet):
@@ -902,6 +918,57 @@ class BookingViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def check_vehicle_availability(self, request):
+        """Check if a vehicle number already has an active booking for the current user"""
+        try:
+            vehicle_number = request.data.get('vehicle_number', '').strip().upper()
+            
+            if not vehicle_number:
+                return Response(
+                    {'error': 'Vehicle number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get user profile
+            user_profile = UserProfile.objects.get(auth_user=request.user)
+            
+            # Check for existing active booking with this vehicle number
+            existing_booking = Booking.objects.filter(
+                user=user_profile,
+                vehicle_number=vehicle_number,
+                status__in=['booked', 'BOOKED', 'active', 'ACTIVE', 'scheduled', 'SCHEDULED']
+            ).first()
+            
+            if existing_booking:
+                return Response({
+                    'available': False,
+                    'message': f'You already have an active booking for vehicle {vehicle_number}',
+                    'existing_booking': {
+                        'booking_id': existing_booking.booking_id,
+                        'slot_id': existing_booking.slot.slot_id,
+                        'lot_name': existing_booking.lot.lot_name,
+                        'status': existing_booking.status
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'available': True,
+                    'message': f'Vehicle {vehicle_number} is available for booking'
+                }, status=status.HTTP_200_OK)
+                
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"❌ Error checking vehicle availability: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def renew(self, request, pk=None):
@@ -978,6 +1045,7 @@ class BookingViewSet(ModelViewSet):
             
             # Create new booking with same details
             from datetime import timedelta
+            from decimal import Decimal
             
             print(f"🔄 Renewing booking {booking.booking_id} for user {booking.user.firstname}")
             
@@ -985,13 +1053,21 @@ class BookingViewSet(ModelViewSet):
             new_start_time = timezone.now()
             new_end_time = new_start_time + timedelta(minutes=10)
             
+            # Calculate renewal price (50% of original price)
+            original_price = Decimal(str(booking.slot.price))
+            renewal_price = original_price / Decimal('2')
+            
+            print(f"💰 Pricing:")
+            print(f"   - Original slot price: ₹{original_price}")
+            print(f"   - Renewal price (50% discount): ₹{renewal_price}")
+            
             new_booking = Booking.objects.create(
                 user=booking.user,
                 slot=booking.slot,
                 lot=booking.lot,
                 vehicle_number=booking.vehicle_number,
                 booking_type=booking.booking_type,
-                price=booking.price,
+                price=renewal_price,  # 50% of original price
                 status='booked',  # Renewed booking is always instant and 'booked' (standardized)
                 start_time=new_start_time,
                 end_time=new_end_time
@@ -1013,7 +1089,7 @@ class BookingViewSet(ModelViewSet):
             payment_method = request.data.get('payment_method', 'UPI')
             amount = request.data.get('amount', float(new_booking.price))
             payment_status = 'PENDING' if payment_method == 'Cash' else 'SUCCESS'
-            transaction_id = f'PM-{new_booking.booking_id}-{int(__import__("time").time())}'
+            transaction_id = f'PM-RENEWAL-{new_booking.booking_id}-{int(__import__("time").time())}'
             
             payment = Payment.objects.create(
                 booking=new_booking,
@@ -1021,7 +1097,8 @@ class BookingViewSet(ModelViewSet):
                 payment_method=payment_method,
                 amount=amount,
                 status=payment_status,
-                transaction_id=transaction_id
+                transaction_id=transaction_id,
+                is_renewal=True  # Mark as renewal payment
             )
             
             print(f"💳 Payment created for renewed booking:")
@@ -1266,6 +1343,13 @@ class CarwashViewSet(ModelViewSet):
                         status=status.HTTP_404_NOT_FOUND
                     )
                 
+                # Validate that the lot provides carwash service
+                if not booking.lot.provides_carwash:
+                    return Response(
+                        {'error': 'This parking lot does not provide car wash services'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
                 # Check if a car wash service is already booked for this booking
                 # Only prevent booking if there's an ACTIVE or PENDING carwash (not completed/cancelled)
                 existing_carwash = Carwash.objects.filter(
@@ -1429,24 +1513,16 @@ class CarwashViewSet(ModelViewSet):
                         print(f"{'='*60}\n")
                     except Carwash_type.DoesNotExist:
                         print(f"⚠️ Carwash type {carwash_type_id} not found")
-                        # Rollback payment if carwash type doesn't exist
-                        print(f"   Rolling back payment...")
-                        payment.delete()
-                        return Response(
-                            {'error': 'Invalid car wash service type.'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+                        # Transaction will auto-rollback (including payment) when we raise an exception
+                        print(f"   Transaction will rollback automatically...")
+                        raise ValueError('Invalid car wash service type.')
                     except Exception as e:
                         print(f"⚠️ Error creating car wash booking: {str(e)}")
                         import traceback
                         traceback.print_exc()
-                        # Rollback payment if unexpected error occurs
-                        print(f"   Rolling back payment...")
-                        payment.delete()
-                        return Response(
-                            {'error': f'Failed to create car wash service: {str(e)}'},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                        )
+                        # Transaction will auto-rollback (including payment) when we raise an exception
+                        print(f"   Transaction will rollback automatically...")
+                        raise
                 
                 # Return success - carwash created (with or without employee)
                 success_message = 'Car Wash Service booked successfully ✅'
@@ -1466,6 +1542,13 @@ class CarwashViewSet(ModelViewSet):
                     'booking_id': booking_id
                 }, status=status.HTTP_201_CREATED)
             
+        except ValueError as ve:
+            # Handle validation errors (like invalid carwash type)
+            print(f"❌ Validation error: {str(ve)}")
+            return Response(
+                {'error': str(ve)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             print(f"❌ Error processing car wash payment: {str(e)}")
             import traceback

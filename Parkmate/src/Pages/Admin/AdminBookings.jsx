@@ -460,6 +460,19 @@ const AdminBookings = () => {
                                             color: '#059669'
                                         }}>
                                             ₹{selectedBooking.price}
+                                            {selectedBooking.payments?.[0]?.is_renewal && (
+                                                <span style={{
+                                                    marginLeft: '8px',
+                                                    padding: '3px 10px',
+                                                    backgroundColor: '#10b981',
+                                                    color: 'white',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    Renewal
+                                                </span>
+                                            )}
                                         </span>
                                     </div>
                                     <div className="detail-item">
@@ -695,7 +708,22 @@ const AdminBookings = () => {
                                             day: 'numeric',
                                             year: 'numeric'
                                         })}</td>
-                                        <td style={{ fontWeight: '700', color: '#059669' }}>₹{booking.price}</td>
+                                        <td style={{ fontWeight: '700', color: '#059669' }}>
+                                            ₹{booking.price}
+                                            {booking.payments?.[0]?.is_renewal && (
+                                                <span style={{
+                                                    marginLeft: '6px',
+                                                    padding: '2px 6px',
+                                                    backgroundColor: '#10b981',
+                                                    color: 'white',
+                                                    fontSize: '10px',
+                                                    fontWeight: '600',
+                                                    borderRadius: '3px'
+                                                }}>
+                                                    RENEWAL
+                                                </span>
+                                            )}
+                                        </td>
                                         <td>
                                             <span className={`status-badge ${booking.status?.toLowerCase()}`}>
                                                 {booking.status?.toUpperCase()}
