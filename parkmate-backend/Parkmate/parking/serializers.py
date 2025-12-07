@@ -244,14 +244,39 @@ class UserDetailSerializer(serializers.ModelSerializer):
         """Get the most recent booking date"""
         from parking.models import Booking, CarWashBooking
         from django.db.models import Max
+        from django.utils import timezone
+        from datetime import datetime, time, date
         
         slot_booking = Booking.objects.filter(user=obj).aggregate(Max('booking_time'))['booking_time__max']
         carwash_booking = CarWashBooking.objects.filter(user=obj).aggregate(Max('booking_time'))['booking_time__max']
         
-        # Return the most recent of the two
+        # Convert date to timezone-aware datetime if needed for comparison
         if slot_booking and carwash_booking:
-            return max(slot_booking, carwash_booking)
-        return slot_booking or carwash_booking
+            # slot_booking is a date, carwash_booking is a timezone-aware datetime
+            # Convert slot_booking (date) to timezone-aware datetime for comparison
+            if isinstance(slot_booking, date) and not isinstance(slot_booking, datetime):
+                slot_dt = timezone.make_aware(datetime.combine(slot_booking, time.min))
+            else:
+                slot_dt = slot_booking
+            
+            if isinstance(carwash_booking, date) and not isinstance(carwash_booking, datetime):
+                carwash_dt = timezone.make_aware(datetime.combine(carwash_booking, time.min))
+            else:
+                carwash_dt = carwash_booking
+            
+            return max(slot_dt, carwash_dt)
+        
+        # Return whichever is available
+        if slot_booking:
+            if isinstance(slot_booking, date) and not isinstance(slot_booking, datetime):
+                return timezone.make_aware(datetime.combine(slot_booking, time.min))
+            return slot_booking
+        if carwash_booking:
+            if isinstance(carwash_booking, date) and not isinstance(carwash_booking, datetime):
+                return timezone.make_aware(datetime.combine(carwash_booking, time.min))
+            return carwash_booking
+        
+        return None
     
     def get_total_transactions(self, obj):
         """Count total payment transactions"""

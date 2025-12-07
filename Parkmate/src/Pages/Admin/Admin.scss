@@ -1841,6 +1841,75 @@ textarea {
     word-break: break-word;
 }
 
+// Vehicle Grid Layout
+.vehicle-grid {
+    grid-template-columns: 1fr 1fr 2fr !important;
+    align-items: start;
+}
+
+// License Image Styling
+.license-item {
+    grid-column: span 2;
+}
+
+.license-image-container {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+        transform: scale(1.02);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        
+        .license-overlay {
+            opacity: 1;
+        }
+    }
+}
+
+.license-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    object-fit: cover;
+    max-height: 250px;
+}
+
+.license-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+    color: white;
+    padding: 12px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    
+    span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        
+        &:before {
+            content: "🔍";
+            font-size: 16px;
+        }
+    }
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

@@ -274,7 +274,7 @@ const AdminUsers = () => {
                                             {/* Vehicle Section */}
                                             <div className="details-section">
                                                 <h3 className="section-title">🚗 Vehicle Information</h3>
-                                                <div className="details-grid">
+                                                <div className="details-grid vehicle-grid">
                                                     <div className="detail-item">
                                                         <span className="detail-label">Vehicle Number</span>
                                                         <span className="detail-value">{userDetails.vehicle_number || 'Not provided'}</span>
@@ -283,9 +283,23 @@ const AdminUsers = () => {
                                                         <span className="detail-label">Vehicle Type</span>
                                                         <span className="detail-value">{userDetails.vehicle_type || 'Not provided'}</span>
                                                     </div>
-                                                    <div className="detail-item">
+                                                    <div className="detail-item license-item">
                                                         <span className="detail-label">Driving License</span>
-                                                        <span className="detail-value">{userDetails.driving_license || 'Not provided'}</span>
+                                                        {userDetails.driving_license ? (
+                                                            <div className="license-image-container">
+                                                                <img 
+                                                                    src={`http://127.0.0.1:8000${userDetails.driving_license}`} 
+                                                                    alt="Driving License" 
+                                                                    className="license-image"
+                                                                    onClick={() => window.open(`http://127.0.0.1:8000${userDetails.driving_license}`, '_blank')}
+                                                                />
+                                                                <div className="license-overlay">
+                                                                    <span>Click to view full size</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="detail-value">Not provided</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
