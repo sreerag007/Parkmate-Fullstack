@@ -576,6 +576,7 @@ class BookingSerializer(serializers.ModelSerializer):
     payment = serializers.SerializerMethodField()
     payments = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
+    is_cancellable = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -602,9 +603,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "payment",
             "payments",
             "total_amount",
+            "is_cancellable",
         ]
 
-    read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "has_carwash", "payment", "payments", "total_amount"]
+    read_only_fields = ["booking_id", "price", "booking_time", "lot", "vehicle_type", "start_time", "end_time", "is_expired", "remaining_time", "carwash", "has_carwash", "payment", "payments", "total_amount", "is_cancellable"]
 
     def validate_vehicle_number(self, value):
         """Validate vehicle number format and check for duplicate active bookings"""
@@ -715,6 +717,13 @@ class BookingSerializer(serializers.ModelSerializer):
         # DEBUG: Log the has_carwash check
         print(f"🔍 get_has_carwash for Booking {obj.booking_id}: {has_carwash} (Count: {obj.booking_by_user.filter(status__in=['active', 'pending']).count()})")
         return has_carwash
+    
+    def get_is_cancellable(self, obj):
+        """
+        Check if booking can be cancelled (not already cancelled or completed).
+        """
+        non_cancellable_statuses = ['CANCELLED', 'COMPLETED', 'cancelled', 'completed']
+        return obj.status not in non_cancellable_statuses
 
     def validate_slot(self, value):
         if not value.is_available:

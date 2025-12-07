@@ -37,7 +37,7 @@
 .info-row span {
     flex: 1;
     color: #111827;
-    word-break: break-word;
+    white-space: nowrap;
 }
 
 .edit-form {

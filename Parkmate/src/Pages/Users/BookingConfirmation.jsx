@@ -19,6 +19,9 @@ const BookingConfirmation = () => {
   const [loading, setLoading] = useState(true);
   const [showRenewConfirm, setShowRenewConfirm] = useState(false);
   const [showRenewalPaymentModal, setShowRenewalPaymentModal] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
   const timerIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
@@ -236,6 +239,51 @@ const BookingConfirmation = () => {
     setShowRenewalPaymentModal(false);
   };
 
+  // Cancel Booking Handlers
+  const handleCancelClick = () => {
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!bookingId) return;
+
+    try {
+      setIsCancelling(true);
+      setShowCancelConfirm(false);
+      notify.info('Cancelling booking...');
+
+      await parkingService.cancelBooking(bookingId);
+      
+      // Stop the timer
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+
+      // Update booking state
+      setBooking(prev => prev ? { ...prev, status: 'CANCELLED' } : null);
+      setIsCancelled(true);
+      setIsExpired(true);
+      setTimeLeft(0);
+      
+      notify.success('Your booking and any linked carwash service have been cancelled successfully.');
+    } catch (err) {
+      console.error('❌ Error cancelling booking:', err);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to cancel booking';
+      notify.error(errorMsg);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleCancelCancellation = () => {
+    setShowCancelConfirm(false);
+  };
+
   const handleConfirmRenewal = async () => {
     if (!bookingId) return;
 
@@ -392,8 +440,16 @@ const BookingConfirmation = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className={`timer-card ${isExpiringSoon ? 'expiring' : ''}`}>
-                      {booking.status.toUpperCase() === 'SCHEDULED' ? (
+                    <div className={`timer-card ${isExpiringSoon ? 'expiring' : ''} ${isCancelled ? 'cancelled' : ''}`}>
+                      {isCancelled ? (
+                        <>
+                          <h4 className="timer-card-label" style={{ color: '#991b1b' }}>❌ Booking Cancelled</h4>
+                          <p className="timer-card-time" style={{ color: '#991b1b' }}>00:00:00</p>
+                          <p className="timer-card-desc" style={{ color: '#6b7280' }}>
+                            Your booking has been cancelled
+                          </p>
+                        </>
+                      ) : booking.status.toUpperCase() === 'SCHEDULED' ? (
                         <>
                           <h4 className="timer-card-label">⏰ Scheduled</h4>
                           <p className="timer-card-time">
@@ -519,6 +575,7 @@ const BookingConfirmation = () => {
                 <button
                   className="btn secondary"
                   onClick={() => navigate('/service', { state: { bookingId: booking.booking_id } })}
+                  disabled={isCancelled}
                 >
                   🚗 Add Car Wash Service
                 </button>
@@ -535,7 +592,41 @@ const BookingConfirmation = () => {
                   🚫 No add-on car wash services available for this lot.
                 </div>
               )}
-              {isExpiringSoon && (
+              
+              {isCancelled ? (
+                <div className="cancelled-banner" style={{
+                  padding: '16px 20px',
+                  backgroundColor: '#fee2e2',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  color: '#991b1b',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  border: '2px solid #fecaca'
+                }}>
+                  ❌ Booking Cancelled
+                </div>
+              ) : (
+                <button 
+                  className="btn danger" 
+                  onClick={handleCancelClick}
+                  disabled={isCancelling}
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                    cursor: isCancelling ? 'not-allowed' : 'pointer',
+                    opacity: isCancelling ? 0.6 : 1
+                  }}
+                >
+                  {isCancelling ? '⏳ Cancelling...' : '❌ Cancel Booking'}
+                </button>
+              )}
+              
+              {isExpiringSoon && !isCancelled && (
                 <div className="expiring-warning">
                   <p style={{ color: '#f59e0b', fontWeight: '500', margin: 0 }}>
                     ⏰ Your booking will expire in {formatTime(timeLeft)}
@@ -634,6 +725,42 @@ const BookingConfirmation = () => {
                   disabled={isRenewing}
                 >
                   {isRenewing ? '🔄 Renewing...' : '✓ Confirm Renewal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Confirmation Modal */}
+        {showCancelConfirm && (
+          <div className="modal-overlay" onClick={handleCancelCancellation}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h3 style={{ color: '#991b1b' }}>Cancel Booking?</h3>
+              <p style={{ marginTop: '12px', color: '#374151' }}>
+                Are you sure you want to cancel this booking? This will also cancel any add-on carwash service linked to this booking.
+              </p>
+              <div className="modal-actions" style={{ marginTop: '24px' }}>
+                <button
+                  className="btn ghost"
+                  onClick={handleCancelCancellation}
+                  disabled={isCancelling}
+                  style={{
+                    border: '1.5px solid #d1d5db',
+                    color: '#6b7280'
+                  }}
+                >
+                  ← Go Back
+                </button>
+                <button
+                  className="btn danger"
+                  onClick={handleConfirmCancel}
+                  disabled={isCancelling}
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: '#fff'
+                  }}
+                >
+                  {isCancelling ? '⏳ Cancelling...' : '✓ Confirm Cancel'}
                 </button>
               </div>
             </div>

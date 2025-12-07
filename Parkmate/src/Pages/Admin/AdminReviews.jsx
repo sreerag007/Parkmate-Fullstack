@@ -13,6 +13,8 @@ const AdminReviews = () => {
   const [filterLot, setFilterLot] = useState('')
   const [filterRating, setFilterRating] = useState('')
   const [sortBy, setSortBy] = useState('recent')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [selectedReview, setSelectedReview] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -71,6 +73,24 @@ const AdminReviews = () => {
     // Apply rating filter
     if (filterRating) {
       filtered = filtered.filter((review) => review.rating === parseInt(filterRating))
+    }
+
+    // Apply date filter
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter((review) => {
+        const reviewDate = new Date(review.created_at)
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom)
+          fromDate.setHours(0, 0, 0, 0)
+          if (reviewDate < fromDate) return false
+        }
+        if (dateTo) {
+          const toDate = new Date(dateTo)
+          toDate.setHours(23, 59, 59, 999)
+          if (reviewDate > toDate) return false
+        }
+        return true
+      })
     }
 
     // Apply sorting
@@ -209,6 +229,52 @@ const AdminReviews = () => {
             <option value="rating-low">Lowest Rating</option>
           </select>
         </div>
+
+        <div className="filter-group">
+          <label htmlFor="date-from">From Date</label>
+          <input
+            id="date-from"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="form-control"
+          />
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="date-to">To Date</label>
+          <input
+            id="date-to"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="form-control"
+          />
+        </div>
+
+        {(dateFrom || dateTo) && (
+          <div className="filter-group" style={{ alignSelf: 'flex-end' }}>
+            <button
+              onClick={() => {
+                setDateFrom('')
+                setDateTo('')
+              }}
+              className="btn-clear-dates"
+              style={{
+                padding: '10px 14px',
+                background: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              Clear Dates
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Reviews Table */}

@@ -896,13 +896,22 @@ class BookingViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def cancel(self, request, pk=None):
-        """Cancel a booking (for BOOKED/ACTIVE/SCHEDULED statuses and by owner/admin)"""
+        """Cancel a booking - Users can cancel their own, Owners can cancel their lot's bookings, Admins can cancel any"""
         try:
             booking = self.get_object()
             user = request.user
             
-            # Check authorization - owner can cancel their own lot's bookings, admin can cancel any
-            if user.role == "Owner":
+            # Check authorization
+            if user.role == "User":
+                # Users can only cancel their own bookings
+                user_profile = UserProfile.objects.get(auth_user=user)
+                if booking.user != user_profile:
+                    return Response(
+                        {'error': 'You can only cancel your own bookings'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            elif user.role == "Owner":
+                # Owners can cancel their own lot's bookings
                 owner = OwnerProfile.objects.get(auth_user=user)
                 if booking.lot.owner != owner:
                     return Response(
@@ -911,20 +920,20 @@ class BookingViewSet(ModelViewSet):
                     )
             elif user.role != "Admin":
                 return Response(
-                    {'error': 'Only owners and admins can cancel bookings'},
+                    {'error': 'Unauthorized to cancel bookings'},
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            # Check if booking can be cancelled - allow cancellation for active/scheduled/booked statuses
-            cancellable_statuses = ['booked', 'BOOKED', 'active', 'ACTIVE', 'scheduled', 'SCHEDULED']
-            if booking.status not in cancellable_statuses:
+            # Check if booking can be cancelled
+            non_cancellable_statuses = ['CANCELLED', 'COMPLETED', 'cancelled', 'completed']
+            if booking.status in non_cancellable_statuses:
                 return Response(
-                    {'error': f'Cannot cancel booking with status: {booking.status}'},
+                    {'error': f'Booking already {booking.status.lower()}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Cancel the booking - use uppercase CANCELLED to match new status system
-            print(f"🗑️ Cancelling booking {booking.booking_id}, releasing slot {booking.slot.slot_id}")
+            # Cancel the booking
+            print(f"🗑️ Cancelling booking {booking.booking_id} by {user.role}: {user.username}")
             booking.status = 'CANCELLED'
             booking.save()
             
@@ -934,14 +943,41 @@ class BookingViewSet(ModelViewSet):
             slot.save()
             print(f"✅ Slot {slot.slot_id} is now available")
             
+            # Cancel linked carwash service if exists
+            carwash_services = booking.booking_by_user.all()
+            if carwash_services.exists():
+                print(f"🧼 Cancelling {carwash_services.count()} linked carwash service(s)")
+                for carwash in carwash_services:
+                    carwash.status = 'cancelled'
+                    # Release employee if assigned
+                    if carwash.employee:
+                        employee = carwash.employee
+                        print(f"   🔄 Releasing employee: {employee.firstname} {employee.lastname}")
+                        employee.current_assignments = max(0, employee.current_assignments - 1)
+                        if employee.current_assignments < 3:
+                            employee.availability_status = 'available'
+                        employee.save()
+                        print(f"   ✅ Employee released, assignments: {employee.current_assignments}")
+                    carwash.save()
+            
+            # TODO: Send WebSocket notification (implement later)
+            # send_booking_cancellation_notification(booking, user)
+            
             serializer = self.get_serializer(booking)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response({
+                'message': 'Booking and linked carwash cancelled successfully.',
+                'booking': serializer.data
+            }, status=status.HTTP_200_OK)
+            
         except Booking.DoesNotExist:
             return Response(
                 {'error': 'Booking not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            print(f"❌ Error cancelling booking: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

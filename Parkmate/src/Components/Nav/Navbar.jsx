@@ -58,13 +58,12 @@ const Navbar = () => {
 
         <nav className={`nav-items ${open ? 'open' : ''}`}>
           <Link to="/" className="nav-link">Home</Link>
-          <Link to="/#about" className="nav-link">About</Link>
           <Link to="/lots" className="nav-link">Lots</Link>
 
           {user && user.role === 'User' ? (
             <>
               <Link to="/profile" className="nav-link">Profile</Link>
-              <Link to="/carwash" className="nav-link">Car Wash</Link>
+              <Link to="/carwash" className="nav-link">Carwash</Link>
               <Link to="/reviews" className="nav-link">Reviews</Link>
               {hasBooking && <Link to="/service" className="nav-link">Services</Link>}
               <button onClick={logoutUser} className="nav-link btn-link">Logout</button>

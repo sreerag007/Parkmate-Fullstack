@@ -67,7 +67,19 @@ const OwnerPayments = () => {
     const [searchQuery, setSearchQuery] = useState('')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
+    const [ownerLots, setOwnerLots] = useState([])
+    const [filterLot, setFilterLot] = useState('')
     const refreshIntervalRef = useRef(null)
+
+    // Fetch owner's lots for filter dropdown
+    const fetchOwnerLots = async () => {
+        try {
+            const response = await parkingService.getLots()
+            setOwnerLots(response)
+        } catch (error) {
+            console.error('Error fetching lots:', error)
+        }
+    }
 
     // Calculate summary statistics from filtered payments
     const calculateSummary = (data) => {
@@ -111,6 +123,7 @@ const OwnerPayments = () => {
 
     useEffect(() => {
         if (owner?.role === 'Owner') {
+            fetchOwnerLots()
             loadPayments()
 
             // Set up auto-refresh every 15 seconds
@@ -158,6 +171,7 @@ const OwnerPayments = () => {
         let filtered = payments.filter(p => {
             if (statusFilter !== 'all' && p.status !== statusFilter) return false
             if (methodFilter !== 'all' && p.payment_method !== methodFilter) return false
+            if (filterLot && p.lot_id !== parseInt(filterLot)) return false
             return true
         })
 
@@ -213,7 +227,7 @@ const OwnerPayments = () => {
         }
 
         return filtered
-    }, [payments, statusFilter, methodFilter, searchQuery, dateFrom, dateTo])
+    }, [payments, statusFilter, methodFilter, filterLot, searchQuery, dateFrom, dateTo])
 
     const summary = calculateSummary(filteredPayments)
 
@@ -336,6 +350,37 @@ const OwnerPayments = () => {
                         Payment records
                     </p>
                 </div>
+            </div>
+
+            {/* Lot Filter Dropdown */}
+            <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>🏢 Filter by Lot</label>
+                <select
+                    value={filterLot}
+                    onChange={(e) => setFilterLot(e.target.value)}
+                    style={{
+                        width: '100%',
+                        maxWidth: '300px',
+                        padding: '10px 12px',
+                        fontSize: '14px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        transition: 'all 0.2s',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        background: '#fff'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                >
+                    <option value="">All Lots</option>
+                    {ownerLots.map((lot) => (
+                        <option key={lot.lot_id} value={lot.lot_id}>
+                            {lot.lot_name}
+                        </option>
+                    ))}
+                </select>
             </div>
 
             {/* Search Bar & Date Filters */}

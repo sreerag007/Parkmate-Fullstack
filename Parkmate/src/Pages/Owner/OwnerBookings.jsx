@@ -15,7 +15,19 @@ const OwnerBookings = () => {
     const [searchQuery, setSearchQuery] = useState('')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
+    const [ownerLots, setOwnerLots] = useState([])
+    const [filterLot, setFilterLot] = useState('')
     const refreshIntervalRef = useRef(null)
+
+    // Fetch owner's lots for filter dropdown
+    const fetchOwnerLots = async () => {
+        try {
+            const response = await parkingService.getLots()
+            setOwnerLots(response)
+        } catch (error) {
+            console.error('Error fetching lots:', error)
+        }
+    }
 
     // Load bookings from backend
     const loadBookings = async () => {
@@ -62,6 +74,7 @@ const OwnerBookings = () => {
 
     useEffect(() => {
         if (owner?.role === 'Owner') {
+            fetchOwnerLots()
             loadBookings()
 
             // Set up auto-refresh every 10 seconds to check for expired bookings
@@ -83,6 +96,11 @@ const OwnerBookings = () => {
             if (filter === 'all') return true
             return b.status === filter
         })
+
+        // Apply lot filter
+        if (filterLot) {
+            filtered = filtered.filter(b => b.lot_detail?.lot_id === parseInt(filterLot))
+        }
 
         // Apply date filter (robust parsing of input `YYYY-MM-DD` to local dates)
         if (dateFrom || dateTo) {
@@ -134,7 +152,7 @@ const OwnerBookings = () => {
         }
 
         return filtered
-    }, [bookings, filter, searchQuery, dateFrom, dateTo])
+    }, [bookings, filter, filterLot, searchQuery, dateFrom, dateTo])
 
     // Sort by recent
     const sortedBookings = [...filteredBookings].sort((a, b) => {
@@ -323,6 +341,37 @@ const OwnerBookings = () => {
                     </div>
                 </div>
             )}
+
+            {/* Lot Filter Dropdown */}
+            <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>🏢 Filter by Lot</label>
+                <select
+                    value={filterLot}
+                    onChange={(e) => setFilterLot(e.target.value)}
+                    style={{
+                        width: '100%',
+                        maxWidth: '300px',
+                        padding: '10px 12px',
+                        fontSize: '14px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        transition: 'all 0.2s',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        background: '#fff'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                >
+                    <option value="">All Lots</option>
+                    {ownerLots.map((lot) => (
+                        <option key={lot.lot_id} value={lot.lot_id}>
+                            {lot.lot_name}
+                        </option>
+                    ))}
+                </select>
+            </div>
 
             {/* Search Bar & Date Filters */}
             <div style={{ marginBottom: '24px' }}>

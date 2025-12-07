@@ -11,7 +11,21 @@ const OwnerServices = () => {
     const [filter, setFilter] = useState('all') // Changed default to 'all' to show everything
     const [selectedService, setSelectedService] = useState(null)
     const [showDetailsModal, setShowDetailsModal] = useState(false)
+    const [ownerLots, setOwnerLots] = useState([])
+    const [filterLot, setFilterLot] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const refreshIntervalRef = useRef(null)
+
+    // Fetch owner's lots for filter dropdown
+    const fetchOwnerLots = async () => {
+        try {
+            const response = await parkingService.getLots()
+            setOwnerLots(response)
+        } catch (error) {
+            console.error('Error fetching lots:', error)
+        }
+    }
 
     // Load carwashes from backend
     const loadOwnerServices = async () => {
@@ -60,6 +74,7 @@ const OwnerServices = () => {
 
     useEffect(() => {
         if (owner?.role === 'Owner') {
+            fetchOwnerLots()
             loadOwnerServices()
             
             // Set up auto-refresh every 15 seconds
@@ -102,6 +117,24 @@ const OwnerServices = () => {
                       filter === 'booked' && (c.status?.toLowerCase() === 'active' || c.status?.toLowerCase() === 'pending') ? 'YES (booked match)' :
                       c.status?.toLowerCase() === filter.toLowerCase() ? 'YES (exact match)' : 'NO'
         })
+        
+        // Apply lot filter
+        if (filterLot && c.lot_read?.lot_id !== parseInt(filterLot)) return false
+        
+        // Apply date filter
+        if (dateFrom || dateTo) {
+            const serviceDate = new Date(c.booking_read?.booking_time || c.created_at)
+            if (dateFrom) {
+                const fromDate = new Date(dateFrom)
+                fromDate.setHours(0, 0, 0, 0)
+                if (serviceDate < fromDate) return false
+            }
+            if (dateTo) {
+                const toDate = new Date(dateTo)
+                toDate.setHours(23, 59, 59, 999)
+                if (serviceDate > toDate) return false
+            }
+        }
         
         if (filter === 'all') return true
         
@@ -184,6 +217,94 @@ const OwnerServices = () => {
                 >
                     🔄 Refresh
                 </button>
+            </div>
+
+            {/* Lot Filter Dropdown */}
+            <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>🏢 Filter by Lot</label>
+                <select
+                    value={filterLot}
+                    onChange={(e) => setFilterLot(e.target.value)}
+                    style={{
+                        width: '100%',
+                        maxWidth: '300px',
+                        padding: '10px 12px',
+                        fontSize: '14px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        transition: 'all 0.2s',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        background: '#fff'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                >
+                    <option value="">All Lots</option>
+                    {ownerLots.map((lot) => (
+                        <option key={lot.lot_id} value={lot.lot_id}>
+                            {lot.lot_name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Date Filters */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1', minWidth: '150px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 From Date</label>
+                    <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            outline: 'none'
+                        }}
+                    />
+                </div>
+                <div style={{ flex: '1', minWidth: '150px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 To Date</label>
+                    <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            outline: 'none'
+                        }}
+                    />
+                </div>
+                {(dateFrom || dateTo) && (
+                    <button
+                        onClick={() => {
+                            setDateFrom('')
+                            setDateTo('')
+                        }}
+                        style={{
+                            padding: '10px 14px',
+                            marginTop: '22px',
+                            background: '#ef4444',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '600'
+                        }}
+                    >
+                        Clear Dates
+                    </button>
+                )}
             </div>
 
             <div className="filters" style={{ marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

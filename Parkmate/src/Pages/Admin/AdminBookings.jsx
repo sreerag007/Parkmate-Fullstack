@@ -10,6 +10,8 @@ const AdminBookings = () => {
     const [successMessage, setSuccessMessage] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterStatus, setFilterStatus] = useState('all')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const [selectedBooking, setSelectedBooking] = useState(null)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [actionLoading, setActionLoading] = useState(false)
@@ -192,7 +194,23 @@ const AdminBookings = () => {
         
         const matchesStatus = filterStatus === 'all' || booking.status?.toLowerCase() === filterStatus.toLowerCase()
         
-        return matchesSearch && matchesStatus
+        // Apply date filter
+        let matchesDate = true
+        if (dateFrom || dateTo) {
+            const bookingDate = new Date(booking.booking_time)
+            if (dateFrom) {
+                const fromDate = new Date(dateFrom)
+                fromDate.setHours(0, 0, 0, 0)
+                if (bookingDate < fromDate) matchesDate = false
+            }
+            if (dateTo) {
+                const toDate = new Date(dateTo)
+                toDate.setHours(23, 59, 59, 999)
+                if (bookingDate > toDate) matchesDate = false
+            }
+        }
+        
+        return matchesSearch && matchesStatus && matchesDate
     })
 
     const bookedCount = bookings.filter(b => b.status?.toLowerCase() === 'booked').length
@@ -252,6 +270,63 @@ const AdminBookings = () => {
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
+            </div>
+
+            {/* Date Filters */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1', minWidth: '150px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 From Date</label>
+                    <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            outline: 'none'
+                        }}
+                    />
+                </div>
+                <div style={{ flex: '1', minWidth: '150px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 To Date</label>
+                    <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            outline: 'none'
+                        }}
+                    />
+                </div>
+                {(dateFrom || dateTo) && (
+                    <button
+                        onClick={() => {
+                            setDateFrom('')
+                            setDateTo('')
+                        }}
+                        style={{
+                            padding: '10px 14px',
+                            marginTop: '22px',
+                            background: '#ef4444',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '600'
+                        }}
+                    >
+                        Clear Dates
+                    </button>
+                )}
             </div>
 
             {successMessage && (
