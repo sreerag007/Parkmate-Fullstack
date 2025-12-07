@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
 import api from '../../services/api'
+import MultiBookingTimer from './MultiBookingTimer'
 import './Userprof.scss'
 
 function formatDate(dateString) {
@@ -98,10 +99,21 @@ export default function Userprof() {
     return <div className="userprof-root"><p>Loading...</p></div>
   }
 
+  // Filter active bookings for the timer
+  const activeBookings = bookings.filter(b => {
+    const status = b.status ? b.status.toLowerCase() : ''
+    return status === 'booked' || status === 'active' || status === 'scheduled'
+  })
+
   return (
     <div className="userprof-root">
       <h2>Your Profile</h2>
       <p className="muted">Manage your profile and view your bookings</p>
+
+      {/* Active Bookings Timer */}
+      {activeBookings.length > 0 && (
+        <MultiBookingTimer bookings={activeBookings} />
+      )}
 
       {/* Profile Information Section */}
       <section className="profile-section">

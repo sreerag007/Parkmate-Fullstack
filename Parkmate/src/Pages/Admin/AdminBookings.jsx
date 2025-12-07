@@ -5,11 +5,13 @@ import './Admin.scss'
 
 const AdminBookings = () => {
     const [bookings, setBookings] = useState([])
+    const [lots, setLots] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [successMessage, setSuccessMessage] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterStatus, setFilterStatus] = useState('all')
+    const [filterLot, setFilterLot] = useState('')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
     const [selectedBooking, setSelectedBooking] = useState(null)
@@ -22,6 +24,7 @@ const AdminBookings = () => {
 
     useEffect(() => {
         fetchBookings()
+        fetchLots()
     }, [])
 
     const fetchBookings = async () => {
@@ -35,6 +38,15 @@ const AdminBookings = () => {
             setError('Failed to load bookings')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const fetchLots = async () => {
+        try {
+            const response = await api.get('/lots/')
+            setLots(response.data)
+        } catch (err) {
+            console.error('Error fetching lots:', err)
         }
     }
 
@@ -194,6 +206,8 @@ const AdminBookings = () => {
         
         const matchesStatus = filterStatus === 'all' || booking.status?.toLowerCase() === filterStatus.toLowerCase()
         
+        const matchesLot = !filterLot || booking.lot_detail?.lot_id?.toString() === filterLot
+        
         // Apply date filter
         let matchesDate = true
         if (dateFrom || dateTo) {
@@ -210,7 +224,7 @@ const AdminBookings = () => {
             }
         }
         
-        return matchesSearch && matchesStatus && matchesDate
+        return matchesSearch && matchesStatus && matchesLot && matchesDate
     })
 
     const bookedCount = bookings.filter(b => b.status?.toLowerCase() === 'booked').length
@@ -235,7 +249,7 @@ const AdminBookings = () => {
             <div style={{ 
                 display: 'flex', 
                 gap: '16px', 
-                marginBottom: '24px',
+                marginBottom: '24px', 
                 flexWrap: 'wrap',
                 alignItems: 'center'
             }}>
@@ -270,9 +284,26 @@ const AdminBookings = () => {
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
-            </div>
-
-            {/* Date Filters */}
+                <select
+                    value={filterLot}
+                    onChange={(e) => setFilterLot(e.target.value)}
+                    style={{
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '0.95rem',
+                        minWidth: '150px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <option value="">All Lots</option>
+                    {lots.map((lot) => (
+                        <option key={lot.lot_id} value={lot.lot_id}>
+                            {lot.lot_name}
+                        </option>
+                    ))}
+                </select>
+            </div>            {/* Date Filters */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1', minWidth: '150px' }}>
                     <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>📅 From Date</label>

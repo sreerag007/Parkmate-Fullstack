@@ -73,6 +73,11 @@ const Navbar = () => {
               <Link to="/owner" className="nav-link owner-link">Owner Dashboard</Link>
               <button onClick={logoutUser} className="nav-link btn-link">Logout</button>
             </>
+          ) : admin && admin.role === 'Admin' ? (
+            <>
+              <Link to="/admin" className="nav-link admin-link">Admin Dashboard</Link>
+              <button onClick={logoutUser} className="nav-link btn-link">Logout</button>
+            </>
           ) : (
             <Link to="/login" className="nav-link">Login</Link>
           )}

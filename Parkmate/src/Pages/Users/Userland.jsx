@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../Context/AuthContext'
 import parkingService from '../../services/parkingService'
-import MultiBookingTimer from './MultiBookingTimer'
 import './Userland.css'
 
 const Userland = () => {
@@ -38,18 +37,10 @@ const Userland = () => {
     }
   }, [user])
 
-  const activeBookings = bookings.filter(b => {
-    const status = b.status ? b.status.toLowerCase() : ''
-    // Include booked (legacy), ACTIVE and SCHEDULED bookings (not COMPLETED)
-    return status === 'booked' || status === 'active' || status === 'scheduled'
-  })
-
   // Debug logging
   useEffect(() => {
     console.log('📊 Bookings data:', bookings)
-    console.log('📊 Active bookings:', activeBookings)
-    console.log('📊 Number of active bookings:', activeBookings.length)
-  }, [bookings, activeBookings])
+  }, [bookings])
 
   return (
     <div className='Land'>
@@ -89,11 +80,6 @@ const Userland = () => {
             get a spot ready before you arrive.</p>
 
           <button onClick={() => navigate('/lots')}>Book Now</button>
-
-          {/* Multi-Booking Timer Component */}
-          {!loading && activeBookings.length > 0 && (
-            <MultiBookingTimer bookings={activeBookings} />
-          )}
 
           {!loading && lots.length > 0 && (
             <div style={{ 
